@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 import sys
 from datetime import datetime, timedelta, timezone
@@ -11,6 +12,7 @@ from threading import RLock
 from typing import Literal
 
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 try:
@@ -81,6 +83,9 @@ class QueueLessState:
             "C1": ServiceLinkedList[dict[str, object]](),
             "C2": ServiceLinkedList[dict[str, object]](),
             "C3": ServiceLinkedList[dict[str, object]](),
+        }
+        self.in_progress_by_counter: dict[str, dict[str, object] | None] = {
+            counter_id: None for counter_id in self.counter_lists
         }
         self.service_graph = ServiceStateGraph(
             queue_wait={"counter_1": 15.0, "counter_2": 12.0, "counter_3": 10.0},
@@ -213,20 +218,20 @@ class QueueLessState:
         priority = self._base_priority(str(token["priority_level"]))
         self.array.append(token)
         self.bst.insert(str(token["token_id"]), token)
-        if token["status"] in ("S3_WAITING", "S4_COUNTER_ASSIGNED"):
-            self.priority_queue.enqueue(
-                token,
-                str(token["token_id"]),
-                priority,
-                arrival,
-            )
         counter_id = str(token["counter_id"])
-        if counter_id in self.counter_lists and token["status"] in (
-            "S3_WAITING",
-            "S4_COUNTER_ASSIGNED",
-            "S5_IN_PROGRESS",
-        ):
-            self.counter_lists[counter_id].insert_tail(token)
+        if counter_id in self.counter_lists:
+            if token["status"] == "S5_IN_PROGRESS":
+                if self.in_progress_by_counter[counter_id] is not None:
+                    raise RuntimeError(f"multiple in-progress tokens for {counter_id}")
+                self.in_progress_by_counter[counter_id] = token
+            elif token["status"] in ("S3_WAITING", "S4_COUNTER_ASSIGNED"):
+                self.priority_queue.enqueue(
+                    token,
+                    str(token["token_id"]),
+                    priority,
+                    arrival,
+                )
+                self.counter_lists[counter_id].insert_tail(token)
 
     def _insert_runtime_token(self, token: dict[str, object]) -> None:
         existing = self.array.linear_search(
@@ -289,7 +294,11 @@ class QueueLessState:
 
     def _recommend_counter(self, service_id: str) -> dict[str, object]:
         queue_wait = {}
-        for code, counter_name in (("C1", "counter_1"), ("C2", "counter_2"), ("C3", "counter_3")):
+        for code, counter_name in (
+            ("C1", "counter_1"),
+            ("C2", "counter_2"),
+            ("C3", "counter_3"),
+        ):
             queue_wait[counter_name] = self.counter_lists[code].length
         available = [
             "counter_1" if self.counter_status["C1"] == "OPEN" else "",
@@ -306,6 +315,7 @@ class QueueLessState:
             },
             transition_overhead=1.0,
             available_counters=available,
+            service_duration=self.services[service_id]["estimated_durations_min"],
         )
         self.service_graph = graph
         result = a_star_search(graph, "waiting_queue", "service_completion")
@@ -335,24 +345,60 @@ class QueueLessState:
         if self.counter_status[counter_id] != "OPEN":
             raise HTTPException(status_code=409, detail=f"{counter_id} is closed")
 
-        for token in self.counter_lists[counter_id].traverse():
-            if token["status"] == "S5_IN_PROGRESS":
-                token["status"] = "S6_COMPLETED"
-                token["updated_at"] = datetime.now(timezone.utc).isoformat()
-                self._persist_token(token)
-                self.counter_lists[counter_id].delete_by_token_id(str(token["token_id"]))
-                return token
+        current = self.in_progress_by_counter[counter_id]
+        if current is not None:
+            completed = dict(current)
+            completed["status"] = "S6_COMPLETED"
+            completed["updated_at"] = datetime.now(timezone.utc).isoformat()
+            self._persist_token(completed)
+            current.update(completed)
+            self.in_progress_by_counter[counter_id] = None
+            return current
 
         if self.counter_lists[counter_id].length == 0:
             raise HTTPException(status_code=404, detail="No token waiting at this counter")
-        token = self.counter_lists[counter_id].pop_front()
-        token["status"] = "S5_IN_PROGRESS"
-        token["updated_at"] = datetime.now(timezone.utc).isoformat()
+
+        now = datetime.now(timezone.utc)
+        next_token_id: str | None = None
+        next_key: tuple[int, datetime] | None = None
+        for item in self.priority_queue.to_heap_snapshot(now):
+            candidate_id = str(item["token_id"])
+            candidate = self.bst.search(candidate_id)
+            if candidate is None:
+                raise RuntimeError(f"scheduled token {candidate_id} is missing from BST")
+            if candidate["counter_id"] != counter_id:
+                continue
+            key = (
+                int(item["effective_priority"]),
+                datetime.fromisoformat(str(item["arrival_timestamp"])),
+            )
+            if next_key is None or key < next_key:
+                next_token_id = candidate_id
+                next_key = key
+        if next_token_id is None:
+            raise RuntimeError(
+                f"waiting tokens for {counter_id} are missing from priority queue"
+            )
+
+        token = self.counter_lists[counter_id].search(next_token_id)
+        if token is None:
+            raise RuntimeError(f"scheduled token {next_token_id} is missing from counter list")
+        token_id = str(token["token_id"])
         try:
-            self.priority_queue.remove(str(token["token_id"]))
-        except KeyError:
-            pass
-        self._persist_token(token)
+            scheduled = self.priority_queue.remove(token_id)
+        except KeyError as exc:
+            raise RuntimeError(f"waiting token {token_id} is missing from priority queue") from exc
+        in_progress = dict(token)
+        in_progress["status"] = "S5_IN_PROGRESS"
+        in_progress["updated_at"] = datetime.now(timezone.utc).isoformat()
+        try:
+            self._persist_token(in_progress)
+        except sqlite3.Error:
+            self.priority_queue.insert(scheduled)
+            raise
+        self.counter_lists[counter_id].delete_by_token_id(token_id)
+        token.update(in_progress)
+        self.in_progress_by_counter[counter_id] = token
         return token
 
     def search(self, request: SearchRequest) -> dict[str, object]:
@@ -401,11 +447,8 @@ class QueueLessState:
         return payload
 
     def state_snapshot(self) -> dict[str, object]:
-        active = [
-            token
-            for token in self.array.traverse()
-            if token["status"] != "S6_COMPLETED"
-        ]
+        all_tokens = list(self.array.traverse())
+        active = [token for token in all_tokens if token["status"] != "S6_COMPLETED"]
         queues = {
             counter_id: [token for token in linked_list.traverse()]
             for counter_id, linked_list in self.counter_lists.items()
@@ -417,6 +460,11 @@ class QueueLessState:
                     "name": counter["name"],
                     "status": self.counter_status[counter["counter_id"]],
                     "queue_length": self.counter_lists[counter["counter_id"]].length,
+                    "current_token_id": (
+                        self.in_progress_by_counter[counter["counter_id"]]["token_id"]
+                        if self.in_progress_by_counter[counter["counter_id"]] is not None
+                        else None
+                    ),
                 }
                 for counter in self.seed["counters"]
             ],
@@ -432,14 +480,30 @@ class QueueLessState:
                 "in_progress_count": sum(
                     1 for token in active if token["status"] == "S5_IN_PROGRESS"
                 ),
+                "completed_count": sum(
+                    1 for token in all_tokens if token["status"] == "S6_COMPLETED"
+                ),
+                "average_eta_min": (
+                    round(
+                        sum(float(token["eta_min"]) for token in active)
+                        / len(active),
+                        2,
+                    )
+                    if active
+                    else 0.0
+                ),
                 "priority_queue_size": self.priority_queue.size,
             },
         }
 
     def ds_snapshot(self) -> dict[str, object]:
         now = datetime.now(timezone.utc)
+        token_array = self.array.to_dict()
+        token_array["slots"] = token_array["elements"] + [
+            None
+        ] * (self.array.capacity - self.array.size)
         return {
-            "token_array": self.array.to_dict(),
+            "token_array": token_array,
             "counter_linked_lists": {
                 counter_id: [token for token in linked.traverse()]
                 for counter_id, linked in self.counter_lists.items()
@@ -455,6 +519,24 @@ class QueueLessState:
 
 runtime = QueueLessState()
 app = FastAPI(title="QueueLess AI", version="1.0")
+local_frontend_origins = [
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:5173",
+]
+production_frontend_origins = [
+    origin.strip().rstrip("/")
+    for origin in os.getenv("FRONTEND_ORIGINS", "").split(",")
+    if origin.strip()
+]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=local_frontend_origins + production_frontend_origins,
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["*"],
+)
 
 
 @app.get("/api/state")
@@ -496,8 +578,8 @@ def book_token(request: BookRequest) -> dict[str, object]:
             "arrival_timestamp": arrival.isoformat(),
             "updated_at": now.isoformat(),
         }
-        runtime._insert_runtime_token(token)
         runtime._persist_token(token)
+        runtime._insert_runtime_token(token)
         return {
             "token": token,
             "recommendation": recommendation,

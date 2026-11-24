@@ -27,6 +27,7 @@ class SchedulingPriorityQueue(Generic[T]):
         self._capacity = 16
         self._size = 0
         self._positions: dict[str, int] = {}
+        self._aging_time: datetime | None = None
 
     @property
     def size(self) -> int:
@@ -65,6 +66,8 @@ class SchedulingPriorityQueue(Generic[T]):
         self._size += 1
 
     def peek(self, now: datetime | None = None) -> ScheduledToken[T]:
+        if now is not None:
+            self.refresh_aging(now)
         if self._size == 0:
             raise LookupError("priority queue is empty")
         item = self._heap[0]
@@ -110,8 +113,7 @@ class SchedulingPriorityQueue(Generic[T]):
             arrival_timestamp=item.arrival_timestamp,
         )
         self._heap[index] = replacement
-        self._sift_up(index)
-        self._sift_down(index)
+        self._restore_heap(index)
 
     def apply_aging(
         self,
@@ -132,6 +134,7 @@ class SchedulingPriorityQueue(Generic[T]):
         """Return array-index heap contents for visualization."""
 
         now = current_time or datetime.now()
+        self.refresh_aging(now)
         snapshot: list[dict[str, object]] = []
         index = 0
         while index < self._size:
@@ -156,8 +159,7 @@ class SchedulingPriorityQueue(Generic[T]):
         return item.base_priority - boosts
 
     def refresh_aging(self, now: datetime) -> None:
-        if self._size < 2:
-            return
+        self._aging_time = now
         for index in range(self._size // 2 - 1, -1, -1):
             self._sift_down(index, now)
         self._rebuild_positions()
@@ -187,9 +189,7 @@ class SchedulingPriorityQueue(Generic[T]):
         self._size -= 1
         if last is not None:
             self._positions[last.token_id] = index
-        self._sift_down(index)
-        self._sift_up(index)
-        self._rebuild_positions()
+        self._restore_heap(index)
         return removed
 
     def heap_snapshot(self, now: datetime) -> list[tuple[str, int, datetime]]:
@@ -206,8 +206,12 @@ class SchedulingPriorityQueue(Generic[T]):
 
     def _key(self, item: ScheduledToken[T], now: datetime | None) -> tuple[int, datetime]:
         effective = item.base_priority
-        if now is not None:
-            elapsed = max(0.0, (now - item.arrival_timestamp).total_seconds() / 60.0)
+        comparison_time = now if now is not None else self._aging_time
+        if comparison_time is not None:
+            elapsed = max(
+                0.0,
+                (comparison_time - item.arrival_timestamp).total_seconds() / 60.0,
+            )
             effective -= int(elapsed // self.aging_interval_minutes)
         return effective, item.arrival_timestamp
 
@@ -224,6 +228,18 @@ class SchedulingPriorityQueue(Generic[T]):
             self._positions[child_item.token_id] = parent
             self._positions[parent_item.token_id] = index
             index = parent
+
+    def _restore_heap(self, index: int) -> None:
+        if index > 0:
+            parent = (index - 1) // 2
+            item = self._heap[index]
+            parent_item = self._heap[parent]
+            if item is None or parent_item is None:
+                raise RuntimeError("priority queue invariant violated")
+            if self._key(item, None) < self._key(parent_item, None):
+                self._sift_up(index)
+                return
+        self._sift_down(index)
 
     def _sift_down(self, index: int, now: datetime | None = None) -> None:
         while True:

@@ -17,7 +17,7 @@ def uniform_cost_search(
 ) -> dict[str, object]:
     """Run Uniform-Cost Search and emit trace and expansion telemetry."""
 
-    heap: list[tuple[float, int, str]] = [(0.0, 0, start_state)]
+    frontier: list[tuple[float, int, str]] = [(0.0, 0, start_state)]
     insertion_order = 1
     best_cost: dict[str, float] = {start_state: 0.0}
     parent: dict[str, str | None] = {start_state: None}
@@ -25,8 +25,8 @@ def uniform_cost_search(
     trace_steps: list[dict[str, object]] = []
     heuristic_values: dict[str, float] = {start_state: 0.0}
 
-    while heap:
-        cost, _, node = heap.pop(0)
+    while frontier:
+        cost, _, node = _pop_min(frontier)
         if cost != best_cost.get(node):
             continue
         nodes_expanded += 1
@@ -41,7 +41,7 @@ def uniform_cost_search(
                 {
                     "step": len(trace_steps),
                     "current_node": node,
-                    "frontier": [item[2] for item in heap],
+                    "frontier": [item[2] for item in frontier],
                     "visited": list(best_cost),
                     "action": "goal_test",
                 }
@@ -62,14 +62,13 @@ def uniform_cost_search(
                 best_cost[edge.target] = new_cost
                 parent[edge.target] = node
                 heuristic_values[edge.target] = 0.0
-                heap.append((new_cost, insertion_order, edge.target))
+                _push(frontier, (new_cost, insertion_order, edge.target))
                 insertion_order += 1
-                heap.sort()
         trace_steps.append(
             {
                 "step": len(trace_steps),
                 "current_node": node,
-                "frontier": [item[2] for item in heap],
+                "frontier": [item[2] for item in frontier],
                 "visited": list(best_cost),
                 "action": "expand_neighbors",
             }
@@ -91,3 +90,35 @@ def _neighbors(
     if isinstance(graph, ServiceStateGraph):
         return graph.neighbors(node)
     return graph.get(node, ())
+
+
+def _push(heap: list[tuple[float, int, str]], item: tuple[float, int, str]) -> None:
+    heap.append(item)
+    index = len(heap) - 1
+    while index > 0:
+        parent = (index - 1) // 2
+        if heap[parent] <= heap[index]:
+            break
+        heap[parent], heap[index] = heap[index], heap[parent]
+        index = parent
+
+
+def _pop_min(heap: list[tuple[float, int, str]]) -> tuple[float, int, str]:
+    minimum = heap[0]
+    last = heap.pop()
+    if heap:
+        heap[0] = last
+        index = 0
+        while True:
+            left = 2 * index + 1
+            right = left + 1
+            smallest = index
+            if left < len(heap) and heap[left] < heap[smallest]:
+                smallest = left
+            if right < len(heap) and heap[right] < heap[smallest]:
+                smallest = right
+            if smallest == index:
+                break
+            heap[index], heap[smallest] = heap[smallest], heap[index]
+            index = smallest
+    return minimum

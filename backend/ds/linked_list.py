@@ -61,27 +61,6 @@ class ServiceLinkedList(Generic[T]):
             self.tail = node
         self._size += 1
 
-    def insert_at(self, pos: int, data: T) -> None:
-        """Insert data at a zero-based position."""
-
-        if pos < 0 or pos > self._size:
-            raise IndexError("linked-list position out of range")
-        if pos == 0:
-            self.insert_head(data)
-            return
-        if pos == self._size:
-            self.insert_tail(data)
-            return
-        previous = self.head
-        position = 0
-        while previous is not None and position < pos - 1:
-            previous = previous.next
-            position += 1
-        if previous is None:
-            raise RuntimeError("linked-list invariant violated")
-        previous.next = Node(data, previous.next)
-        self._size += 1
-
     def search(self, token_id: str) -> T | None:
         """Return payload whose token_id matches."""
 
@@ -122,31 +101,21 @@ class ServiceLinkedList(Generic[T]):
         return None
 
     def append(self, item: T) -> None:
-        node = Node(item)
-        if self.tail is None:
-            self.head = node
-            self.tail = node
-        else:
-            self.tail.next = node
-            self.tail = node
-        self._size += 1
+        self.insert_tail(item)
 
     def prepend(self, item: T) -> None:
-        node = LinkedNode(item)
-        node.next = self.head
-        self.head = node
-        if self.tail is None:
-            self.tail = node
-        self._size += 1
+        self.insert_head(item)
 
     def insert_at(self, index: int, item: T) -> None:
+        """Insert ``item`` at a zero-based position."""
+
         if index < 0 or index > self._size:
             raise IndexError("linked-list index out of range")
         if index == 0:
-            self.prepend(item)
+            self.insert_head(item)
             return
         if index == self._size:
-            self.append(item)
+            self.insert_tail(item)
             return
         previous = self.head
         position = 0
@@ -155,9 +124,7 @@ class ServiceLinkedList(Generic[T]):
             position += 1
         if previous is None:
             raise RuntimeError("linked-list invariant violated")
-        node = LinkedNode(item)
-        node.next = previous.next
-        previous.next = node
+        previous.next = Node(item, previous.next)
         self._size += 1
 
     def peek_front(self) -> T:

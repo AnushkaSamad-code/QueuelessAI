@@ -37,7 +37,7 @@ class TokenBST(Generic[T]):
         return self._size
 
     def insert(self, token_id: str, payload: T) -> None:
-        if self.search(token_id) is not None:
+        if self._find_node(token_id)[0] is not None:
             raise ValueError("duplicate token_id")
         new_node = BSTNode(token_id, payload)
         if self.root is None:
