@@ -8,7 +8,7 @@ QueueLess AI is an appointment, token, and service-routing platform for diagnost
 
 The Version 1.0 implementation provides a simulated three-counter laboratory. Customers can book appointments and receive tokens from `Q101` through `Q999`; counter staff can start, hold, resume, transfer, or complete service; and administrators can view utilization and queue analytics. Custom queue and heap implementations provide the principal data-structure operations. Breadth-first search (BFS), uniform-cost search (UCS), and $A^*$ provide route selection over a laboratory workflow graph. SQLite provides restart-safe state recovery.
 
-The project is divided across backend services, data structures, AI routing, the React interface, integration, and verification. The resulting system serves as an academic implementation of Applied Artificial Intelligence and Data Structures, with controlled laboratory simulation rather than a production medical deployment.
+The project follows the finalized team division: Anushka Samad leads AI and arrays while coordinating UI/UX and the project; Ubaid Raza leads UCS, $A^*$, backend development, and the remaining data structures; Laiba Khan completes the small diagnostic-service sample-data task; and Danyal Hassan provides supporting testing, screenshots, feedback, and contribution maintenance. The resulting system serves as an academic implementation of Applied Artificial Intelligence and Data Structures, with controlled laboratory simulation rather than a production medical deployment.
 
 ## 2. Real-World Problem Statement
 
@@ -88,11 +88,15 @@ Version 1.0 is an academic and technical simulation. The future FYP scope may ex
 
 ## 7. Detailed Member Responsibility Matrix
 
-| Member | Backend | Data Structures | AI | Frontend | Testing and Documentation |
-|---|---|---|---|---|---|
-| Anushka Samad - CSC-25F-083 | FastAPI routes, service orchestration, integration | Queue API integration | Workflow policy coordination | Staff API integration | Project coordination, SRS, final report |
-| Ubaid Raza - CSC-25F-013 | Routing service interfaces | Graph representation and edge costs | BFS, UCS, $A^*$ implementation and admissibility tests | Routing visualization data | Algorithm test cases and technical report sections |
-| Laiba Khan - CSC-25F-024 | Frontend API contracts | - | Customer-facing wait and route status display | React views, Tailwind layout, keyboard and WCAG AA checks | UI test plan and user manual |
-| Danyal Hassan - CSC-25F-032 | SQLite repositories and transactions | Custom queue, heap, and priority operations | Fairness and aging input structures | Service-state data handling | Unit tests, recovery tests, latency measurement |
+The percentages below apply to the two technical subjects only. Anushka and Ubaid each own 50% of Artificial Intelligence and 50% of Data Structures. Laiba's and Danyal's assignments are intentionally limited to the supporting tasks stated below; they do not own coding, backend, or AI-algorithm implementation.
 
-All members participate in integration and final verification. No responsibility is complete until peer review and traceable tests have been performed.
+| Member | Finalized Role | Artificial Intelligence (50%) | Data Structures (50%) | Additional Responsibility |
+|---|---|---|---|---|---|
+| Anushka Samad - CSC-25F-083 | AI Lead | Problem formulation; state-space representation; initial state, goal state, and actions; graph creation; dictionary creation; BFS implementation; graph visualization; AI documentation | Array implementation; array operations; array integration with QueueLess | UI/UX decisions and overall project coordination |
+| Ubaid Raza - CSC-25F-013 | DS & Search Lead | UCS; $A^*$ search; path-cost calculation; heuristic function; search-algorithm integration | Linked-list implementation; priority-queue implementation; BST implementation; insertion, deletion, search, and traversal operations; data-structures integration | Backend development |
+| Laiba Khan - CSC-25F-024 | Project Content & Sample Data Collection (small task) | Not assigned | Not assigned | List 5-10 diagnostic laboratory services; collect estimated service durations; suggest three service-counter names; no coding, backend, or AI algorithms |
+| Danyal Hassan - CSC-25F-032 | Testing & Project Support (supporting) | Not assigned | Not assigned | Collect screenshots; prepare a basic testing checklist; test assigned features and report feedback; maintain GitHub contributions for completed work |
+
+### Git and Co-Authoring Workflow
+
+Each member records only actual completed work in GitHub. When Anushka or Ubaid assists with documentation or testing, the commit must include a `Co-authored-by` trailer for the assisting contributor using their verified GitHub noreply address. This records real assistance without assigning unperformed work.

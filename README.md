@@ -42,12 +42,29 @@ React UI -> FastAPI routes -> application services -> custom data structures / A
 
 ## Team Division
 
-| Member | Registration Number | Primary Division |
+| Member | Registration Number | Finalized Role and Division |
 |---|---|---|
-| Anushka Samad | CSC-25F-083 | Backend API, project integration, project coordination |
-| Ubaid Raza | CSC-25F-013 | AI algorithms, laboratory routing, algorithm verification |
-| Laiba Khan | CSC-25F-024 | React interface, accessibility, frontend integration |
-| Danyal Hassan | CSC-25F-032 | Data structures, SQLite persistence, testing |
+| Anushka Samad | CSC-25F-083 | AI Lead; Artificial Intelligence (50%), Data Structures (50%); UI/UX decisions and overall project coordination |
+| Ubaid Raza | CSC-25F-013 | DS & Search Lead; Artificial Intelligence (50%), Data Structures (50%); backend development |
+| Laiba Khan | CSC-25F-024 | Project Content & Sample Data Collection (small task); no coding, backend, or AI algorithm ownership |
+| Danyal Hassan | CSC-25F-032 | Testing & Project Support (supporting); screenshots, testing checklist, assigned-feature testing, feedback, and GitHub contribution maintenance |
+
+### Detailed Ownership
+
+- **Anushka Samad:** AI ownership covers problem formulation, state-space representation, initial state/goal state/actions, graph creation, dictionary creation, BFS, graph visualization, and AI documentation. Data Structures ownership covers array implementation, array operations, and array integration with QueueLess. Anushka also makes UI/UX decisions and coordinates the project overall.
+- **Ubaid Raza:** AI ownership covers Uniform Cost Search (UCS), $A^*$, path-cost calculation, heuristic function, and search-algorithm integration. Data Structures ownership covers linked lists, priority queues, BSTs, insertion/deletion/search/traversal operations, and data-structures integration. Ubaid also owns backend development.
+- **Laiba Khan:** Laiba prepares a list of 5-10 diagnostic laboratory services, collects estimated service durations, and suggests three service-counter names. This is a small content and sample-data task with no coding, backend, or AI-algorithm responsibility.
+- **Danyal Hassan:** Danyal collects application screenshots, prepares a basic testing checklist, tests assigned features, reports feedback, and maintains GitHub contributions for completed work.
+
+### Git and Co-Authoring Workflow
+
+Each member records only work actually completed under their own GitHub contribution. When Anushka or Ubaid materially assists with documentation or testing, the contributor creating the commit records that assistance with the required trailer:
+
+```text
+Co-authored-by: <assisting contributor name> <verified GitHub noreply address>
+```
+
+Commit history must not claim work that was not performed. Co-author trailers are used for actual assistance, including documentation or testing support.
 
 ## Directory Map
 
