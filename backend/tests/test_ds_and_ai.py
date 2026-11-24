@@ -61,7 +61,7 @@ def test_ut_02_token_array_deletes_middle_with_left_shift() -> None:
     assert removed.token_id == "Q102"
     assert tokens.size == 3
     assert [item.token_id for item in tokens.traverse()] == ["Q101", "Q103", "Q104"]
-    assert tokens.to_dict()["slots"][1]["token_id"] == "Q103"
+    assert tokens.to_dict()["elements"][1]["token_id"] == "Q103"
     try:
         tokens.get(tokens.size)
     except IndexError:

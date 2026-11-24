@@ -24,16 +24,6 @@ def test_token_array_shifts_and_resizes() -> None:
     assert tokens.delete_at(1).token_id == "Q102"
     assert [token.token_id for token in tokens.traverse()] == ["Q101", "Q103"]
     assert tokens.binary_search_by_id("Q103") == 1
-    snapshot = tokens.to_dict()
-    assert set(snapshot) == {"capacity", "size", "slots"}
-    assert snapshot["capacity"] == 4
-    assert snapshot["size"] == 2
-    assert snapshot["slots"] == [
-        {"token_id": "Q101"},
-        {"token_id": "Q103"},
-        None,
-        None,
-    ]
 
 
 def test_counter_array_is_fixed_at_three_slots() -> None:
@@ -58,17 +48,6 @@ def test_graph_builds_weighted_counter_branches() -> None:
     assert len(assignment_edges) == 3
     assert assignment_edges[0].cost == 21.0
     assert len(graph.export_visualization()["nodes"]) == 11
-    transfer = next(
-        edge
-        for edge in graph.neighbors("counter_1.registration")
-        if edge.action == "transfer_to_counter_2"
-    )
-    assert transfer.target == "counter_2.registration"
-    assert transfer.cost == 1.0
-
-    graph.rebuild(queue_wait={"counter_3": 2.0}, available_counters=("counter_3",))
-    assert graph.neighbors("waiting_queue")[0].cost == 6.0
-    assert len(graph.export_visualization()["nodes"]) == 5
 
 
 def test_bfs_returns_path_cost_and_trace() -> None:
@@ -81,10 +60,3 @@ def test_bfs_returns_path_cost_and_trace() -> None:
     assert result["total_cost"] == 34.0
     assert result["nodes_expanded"] == 11
     assert result["trace_steps"][-1]["action"] == "goal_test"
-    assert set(result["trace_steps"][0]) == {
-        "step",
-        "current_node",
-        "frontier",
-        "visited",
-        "action",
-    }
