@@ -84,9 +84,12 @@ export function advanceCounter(counterId: string): Promise<{ token: Token }> {
   });
 }
 
-export function searchRoute(algorithm: "BFS" | "UCS" | "A*"): Promise<SearchResponse> {
+export function searchRoute(
+  algorithm: "BFS" | "UCS" | "A*",
+  goalState = "service_completion",
+): Promise<SearchResponse> {
   return request<SearchResponse>("/api/ai/search", {
     method: "POST",
-    body: JSON.stringify({ algorithm }),
+    body: JSON.stringify({ algorithm, goal_state: goalState }),
   });
 }

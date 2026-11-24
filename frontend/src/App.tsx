@@ -10,6 +10,7 @@ import {
 } from "./api";
 import Icon from "./Icons";
 import type { IconName } from "./Icons";
+import GraphVisualizer from "./components/GraphVisualizer.jsx";
 import type {
   BookResponse,
   Counter,
@@ -86,6 +87,7 @@ const navigation: Array<{ id: PortalView; label: string; icon: IconName }> = [
   { id: "booking", label: "Customer booking", icon: "ticket" },
   { id: "staff", label: "Counter console", icon: "users" },
   { id: "inspector", label: "Data inspector", icon: "layers" },
+  { id: "search", label: "Graph visualizer", icon: "activity" },
 ];
 
 const serviceById = new Map<string, Service>(
@@ -437,6 +439,8 @@ function App() {
                   "Coordinate active service counters and move the queue forward."}
                 {view === "inspector" &&
                   "Inspect the live data structures that power each queue decision."}
+                {view === "search" &&
+                  "Trace BFS, UCS, and A* through the weighted service-state graph."}
               </p>
             </div>
             <div className="heading-meta">
@@ -507,6 +511,11 @@ function App() {
           )}
           {view === "inspector" && (
             <InspectorView snapshot={inspector} loading={initialLoading} />
+          )}
+          {view === "search" && (
+            <GraphVisualizer
+              tokens={inspector?.bst.inorder ?? snapshot?.active_tokens ?? []}
+            />
           )}
           <footer className="page-footer">
             <span>QueueLess AI</span>

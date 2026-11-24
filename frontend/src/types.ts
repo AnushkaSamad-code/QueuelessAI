@@ -1,5 +1,5 @@
 export type PriorityLevel = "STANDARD" | "APPOINTMENT" | "PRIORITY";
-export type PortalView = "booking" | "staff" | "inspector";
+export type PortalView = "booking" | "staff" | "inspector" | "search";
 export type Theme = "dark" | "light";
 
 export interface Token {
@@ -57,11 +57,41 @@ export interface SearchResponse {
   optimal_path: string[];
   total_cost: number | null;
   nodes_expanded: number;
-  trace_steps: Array<Record<string, unknown>>;
+  trace_steps: SearchTraceStep[];
+  heuristic_values?: Record<string, number>;
   graph?: {
-    nodes: Array<Record<string, unknown>>;
-    edges: Array<Record<string, unknown>>;
+    nodes: SearchGraphNode[];
+    edges: SearchGraphEdge[];
   };
+}
+
+export interface SearchTraceStep {
+  step: number;
+  current_node: string;
+  frontier: string[];
+  visited: string[];
+  action: string;
+}
+
+export interface SearchGraphNode {
+  id: string;
+  label: string;
+  x: number;
+  y: number;
+  lifecycle_state: string;
+  counter_id: string | null;
+  stage: string | null;
+}
+
+export interface SearchGraphEdge {
+  source: string;
+  target: string;
+  action: string;
+  cost: number;
+  source_x: number;
+  source_y: number;
+  target_x: number;
+  target_y: number;
 }
 
 export interface ArraySnapshot {
