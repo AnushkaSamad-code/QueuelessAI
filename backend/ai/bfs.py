@@ -10,7 +10,11 @@ from .graph_model import GraphEdge, ServiceStateGraph
 
 
 class BFSTraceStep(TypedDict):
+<<<<<<< Updated upstream
     """One observable BFS expansion step."""
+=======
+    """One visualization-ready BFS expansion record."""
+>>>>>>> Stashed changes
 
     step: int
     current_node: str
@@ -20,7 +24,11 @@ class BFSTraceStep(TypedDict):
 
 
 class BFSResult(TypedDict):
+<<<<<<< Updated upstream
     """Structured result consumed by the Graph Visualizer."""
+=======
+    """Structured result and trace produced by breadth-first search."""
+>>>>>>> Stashed changes
 
     algorithm: str
     optimal_path: list[str]
@@ -37,6 +45,7 @@ def breadth_first_search(
     start_state: str,
     goal_state: str,
 ) -> BFSResult:
+<<<<<<< Updated upstream
     """Return a shallowest path and a step-by-step BFS execution trace.
 
     BFS optimizes edge count, not weighted cost. ``total_cost`` is the sum of
@@ -44,6 +53,14 @@ def breadth_first_search(
     UCS and A*. If no goal is reachable, the path is empty and cost is ``None``.
     """
 
+=======
+    """Return a shallowest path, its edge cost, expansion count, and trace.
+
+    BFS optimizes the number of edges, not accumulated edge cost when weights
+    differ. The ``optimal_path`` key is retained for compatibility with the
+    other search algorithm result shapes.
+    """
+>>>>>>> Stashed changes
     frontier: deque[str] = deque((start_state,))
     discovered: set[str] = {start_state}
     parent: dict[str, str | None] = {start_state: None}
@@ -102,11 +119,13 @@ def breadth_first_search(
 
 
 def _neighbors(graph: GraphInput, node: str) -> Sequence[GraphEdge]:
+    """Get outgoing edges from either supported graph representation."""
     if isinstance(graph, ServiceStateGraph):
         return graph.neighbors(node)
     return graph.get(node, ())
 
 
+<<<<<<< Updated upstream
 def _trace(
     step: int,
     current: str,
@@ -127,6 +146,10 @@ def _reconstruct_path(
     parent: Mapping[str, str | None],
     goal_state: str,
 ) -> list[str]:
+=======
+def _reconstruct(parent: Mapping[str, str | None], goal: str) -> list[str]:
+    """Reconstruct a start-to-goal path from predecessor links."""
+>>>>>>> Stashed changes
     path: list[str] = []
     current: str | None = goal_state
     while current is not None:
