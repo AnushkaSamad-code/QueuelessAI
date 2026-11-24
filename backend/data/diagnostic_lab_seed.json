@@ -1,0 +1,198 @@
+{
+  "counters": [
+    {
+      "counter_id": "C1",
+      "name": "Counter 1 - Registration & Triage",
+      "base_speed_multiplier": 1.0,
+      "status": "OPEN"
+    },
+    {
+      "counter_id": "C2",
+      "name": "Counter 2 - Phlebotomy & Sample Collection",
+      "base_speed_multiplier": 1.15,
+      "status": "OPEN"
+    },
+    {
+      "counter_id": "C3",
+      "name": "Counter 3 - Diagnostics & Report Dispatch",
+      "base_speed_multiplier": 1.10,
+      "status": "OPEN"
+    }
+  ],
+  "services": [
+    {
+      "service_id": "SVC-001",
+      "name": "Complete Blood Count (CBC)",
+      "category": "Hematology",
+      "required_stages": ["Registration", "Sample Collection", "Report Collection"],
+      "estimated_durations_min": {
+        "Registration": 5,
+        "Sample Collection": 8,
+        "Report Collection": 3
+      }
+    },
+    {
+      "service_id": "SVC-002",
+      "name": "Lipid Profile",
+      "category": "Biochemistry",
+      "required_stages": ["Registration", "Sample Collection", "Report Collection"],
+      "estimated_durations_min": {
+        "Registration": 5,
+        "Sample Collection": 10,
+        "Report Collection": 4
+      }
+    },
+    {
+      "service_id": "SVC-003",
+      "name": "HbA1c Diabetes Panel",
+      "category": "Diabetes Diagnostics",
+      "required_stages": ["Registration", "Sample Collection", "Report Collection"],
+      "estimated_durations_min": {
+        "Registration": 4,
+        "Sample Collection": 7,
+        "Report Collection": 3
+      }
+    },
+    {
+      "service_id": "SVC-004",
+      "name": "Thyroid Function (TSH)",
+      "category": "Endocrinology",
+      "required_stages": ["Registration", "Sample Collection", "Report Collection"],
+      "estimated_durations_min": {
+        "Registration": 4,
+        "Sample Collection": 6,
+        "Report Collection": 3
+      }
+    },
+    {
+      "service_id": "SVC-005",
+      "name": "Liver Function Test (LFT)",
+      "category": "Hepatic Panel",
+      "required_stages": ["Registration", "Sample Collection", "Report Collection"],
+      "estimated_durations_min": {
+        "Registration": 5,
+        "Sample Collection": 9,
+        "Report Collection": 4
+      }
+    },
+    {
+      "service_id": "SVC-006",
+      "name": "Renal Function Test (RFT)",
+      "category": "Nephrology Panel",
+      "required_stages": ["Registration", "Sample Collection", "Report Collection"],
+      "estimated_durations_min": {
+        "Registration": 5,
+        "Sample Collection": 9,
+        "Report Collection": 4
+      }
+    },
+    {
+      "service_id": "SVC-007",
+      "name": "Vitamin D3 Assay",
+      "category": "Vitamin & Nutritional Testing",
+      "required_stages": ["Registration", "Sample Collection", "Report Collection"],
+      "estimated_durations_min": {
+        "Registration": 4,
+        "Sample Collection": 8,
+        "Report Collection": 3
+      }
+    },
+    {
+      "service_id": "SVC-008",
+      "name": "Diagnostic Report Pickup",
+      "category": "Report Services",
+      "required_stages": ["Registration", "Sample Collection", "Report Collection"],
+      "estimated_durations_min": {
+        "Registration": 3,
+        "Sample Collection": 2,
+        "Report Collection": 5
+      }
+    }
+  ],
+  "sample_tokens": [
+    {
+      "token_id": "Q101",
+      "customer_name": "Ayesha Khan",
+      "service_id": "SVC-001",
+      "priority_level": "STANDARD",
+      "arrival_offset_min": 0
+    },
+    {
+      "token_id": "Q102",
+      "customer_name": "Muhammad Hamza",
+      "service_id": "SVC-002",
+      "priority_level": "APPOINTMENT",
+      "arrival_offset_min": 3
+    },
+    {
+      "token_id": "Q103",
+      "customer_name": "Sana Malik",
+      "service_id": "SVC-004",
+      "priority_level": "STANDARD",
+      "arrival_offset_min": 5
+    },
+    {
+      "token_id": "Q104",
+      "customer_name": "Usman Ali",
+      "service_id": "SVC-003",
+      "priority_level": "PRIORITY",
+      "arrival_offset_min": 8
+    },
+    {
+      "token_id": "Q105",
+      "customer_name": "Fatima Noor",
+      "service_id": "SVC-005",
+      "priority_level": "APPOINTMENT",
+      "arrival_offset_min": 10
+    },
+    {
+      "token_id": "Q106",
+      "customer_name": "Bilal Ahmed",
+      "service_id": "SVC-006",
+      "priority_level": "STANDARD",
+      "arrival_offset_min": 14
+    },
+    {
+      "token_id": "Q107",
+      "customer_name": "Hira Siddiqui",
+      "service_id": "SVC-007",
+      "priority_level": "APPOINTMENT",
+      "arrival_offset_min": 16
+    },
+    {
+      "token_id": "Q108",
+      "customer_name": "Kamran Raza",
+      "service_id": "SVC-008",
+      "priority_level": "STANDARD",
+      "arrival_offset_min": 19
+    },
+    {
+      "token_id": "Q109",
+      "customer_name": "Mehak Iqbal",
+      "service_id": "SVC-001",
+      "priority_level": "APPOINTMENT",
+      "arrival_offset_min": 22
+    },
+    {
+      "token_id": "Q110",
+      "customer_name": "Zainab Farooq",
+      "service_id": "SVC-003",
+      "priority_level": "STANDARD",
+      "arrival_offset_min": 25
+    },
+    {
+      "token_id": "Q111",
+      "customer_name": "Omar Shah",
+      "service_id": "SVC-004",
+      "priority_level": "PRIORITY",
+      "arrival_offset_min": 28
+    },
+    {
+      "token_id": "Q112",
+      "customer_name": "Nida Hussain",
+      "service_id": "SVC-005",
+      "priority_level": "STANDARD",
+      "arrival_offset_min": 31
+    }
+  ]
+}
