@@ -53,7 +53,7 @@ React UI -> FastAPI routes -> application services -> custom data structures / A
 
 - **Anushka Samad:** AI ownership covers problem formulation, state-space representation, initial state/goal state/actions, graph creation, dictionary creation, BFS, graph visualization, and AI documentation. Data Structures ownership covers array implementation, array operations, and array integration with QueueLess. Anushka also makes UI/UX decisions and coordinates the project overall.
 - **Ubaid Raza:** AI ownership covers Uniform Cost Search (UCS), $A^*$, path-cost calculation, heuristic function, and search-algorithm integration. Data Structures ownership covers linked lists, priority queues, BSTs, insertion/deletion/search/traversal operations, and data-structures integration. Ubaid also owns backend development.
-- **Laiba Khan:** Laiba prepares a list of 5-10 diagnostic laboratory services, collects estimated service durations, and suggests three service-counter names. This is a small content and sample-data task with no coding, backend, or AI-algorithm responsibility.
+- **Laiba Khan:** Laiba prepares a list of 5–10 diagnostic laboratory services, collects estimated service durations, and suggests 3 service-counter names. This is a small content and sample-data task with no coding, backend, or AI-algorithm responsibility.
 - **Danyal Hassan:** Danyal collects application screenshots, prepares a basic testing checklist, tests assigned features, reports feedback, and maintains GitHub contributions for completed work.
 
 ### Git and Co-Authoring Workflow
@@ -131,13 +131,13 @@ Version 1.0 uses SQLite in `backend/data/queueless.db`. Schema initialization mu
 
 1. [Project Proposal](docs/01_Project_Proposal.md)
 2. [Software Requirements Specification](docs/02_SRS_Requirements.md)
-3. [System Design](docs/03_System_Design.md)
-4. [AI Algorithms](docs/04_AI_Algorithms.md)
-5. [Data Structures](docs/05_Data_Structures.md)
-6. [API Specification](docs/06_API_Specification.md)
-7. [Database Schema](docs/07_Database_Schema.md)
-8. [Test Plan](docs/08_Test_Plan.md)
-9. [UI/UX Specification](docs/09_UI_UX_Specification.md)
-10. [User Manual](docs/10_User_Manual.md)
-11. [Deployment Guide](docs/11_Deployment_Guide.md)
-12. [Project Report](docs/12_Project_Report.md)
+3. [Problem Formulation and State Space](docs/03_Problem_Formulation_State_Space.md)
+4. [Graph and Dictionary Specification](docs/04_Graph_and_Dictionary_Spec.md)
+5. [AI Algorithms Documentation](docs/05_AI_Algorithms_Documentation.md)
+6. [Data Structures Design and Implementation](docs/06_Data_Structures_Design_and_Impl.md)
+7. [System Architecture and Components](docs/07_System_Architecture_and_Components.md)
+8. [UML, Use Case, Class, Flow, and Call Flow](docs/08_UML_UseCase_Class_Flow_CallFlow.md)
+9. [ER Diagram and Database Schema](docs/09_ER_Diagram_and_DB_Schema.md)
+10. [Testing Report and QA](docs/10_Testing_Report_and_QA.md)
+11. [User Manual](docs/11_User_Manual.md)
+12. [Final Project Report](docs/12_Final_Project_Report.md)

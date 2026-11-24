@@ -31,7 +31,7 @@ The implementation workflow assigns the AI and Data Structures modules as follow
 
 - **Anushka Samad (CSC-25F-083), AI Lead:** owns problem formulation, state-space representation, initial state/goal state/actions, graph and dictionary creation, BFS, graph visualization, AI documentation, array implementation and operations, and array integration with QueueLess. Anushka also makes UI/UX decisions and coordinates the project overall.
 - **Ubaid Raza (CSC-25F-013), DS & Search Lead:** owns UCS, $A^*$, path-cost calculation, the heuristic function, search-algorithm integration, linked lists, priority queues, BSTs, insertion/deletion/search/traversal operations, data-structures integration, and backend development.
-- **Laiba Khan (CSC-25F-024), Project Content & Sample Data Collection (small task):** prepares 5-10 diagnostic laboratory services, estimated service durations, and three service-counter names. Laiba has no coding, backend, or AI-algorithm assignment.
+- **Laiba Khan (CSC-25F-024), Project Content & Sample Data Collection (small task):** prepares 5–10 diagnostic laboratory services, estimated service durations, and 3 service-counter names. Laiba has no coding, backend, or AI-algorithm assignment.
 - **Danyal Hassan (CSC-25F-032), Testing & Project Support (supporting):** collects screenshots, prepares a basic testing checklist, tests assigned features, reports feedback, and maintains GitHub contributions for completed work.
 
 Anushka and Ubaid each own 50% of Artificial Intelligence and 50% of Data Structures. These ownership assignments do not alter the functional or non-functional requirements below.

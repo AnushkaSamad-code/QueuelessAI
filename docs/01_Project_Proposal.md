@@ -94,7 +94,7 @@ The percentages below apply to the two technical subjects only. Anushka and Ubai
 |---|---|---|---|---|---|
 | Anushka Samad - CSC-25F-083 | AI Lead | Problem formulation; state-space representation; initial state, goal state, and actions; graph creation; dictionary creation; BFS implementation; graph visualization; AI documentation | Array implementation; array operations; array integration with QueueLess | UI/UX decisions and overall project coordination |
 | Ubaid Raza - CSC-25F-013 | DS & Search Lead | UCS; $A^*$ search; path-cost calculation; heuristic function; search-algorithm integration | Linked-list implementation; priority-queue implementation; BST implementation; insertion, deletion, search, and traversal operations; data-structures integration | Backend development |
-| Laiba Khan - CSC-25F-024 | Project Content & Sample Data Collection (small task) | Not assigned | Not assigned | List 5-10 diagnostic laboratory services; collect estimated service durations; suggest three service-counter names; no coding, backend, or AI algorithms |
+| Laiba Khan - CSC-25F-024 | Project Content & Sample Data Collection (small task) | Not assigned | Not assigned | List 5–10 diagnostic laboratory services; collect estimated service durations; suggest 3 service-counter names; no coding, backend, or AI algorithms |
 | Danyal Hassan - CSC-25F-032 | Testing & Project Support (supporting) | Not assigned | Not assigned | Collect screenshots; prepare a basic testing checklist; test assigned features and report feedback; maintain GitHub contributions for completed work |
 
 ### Git and Co-Authoring Workflow
