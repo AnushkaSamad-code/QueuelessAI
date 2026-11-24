@@ -80,9 +80,9 @@ class QueueLessState:
         self.bst = TokenBST[dict[str, object]]()
         self.priority_queue = SchedulingPriorityQueue[dict[str, object]]()
         self.counter_lists = {
-            "C1": ServiceLinkedList[dict[str, object]](),
-            "C2": ServiceLinkedList[dict[str, object]](),
-            "C3": ServiceLinkedList[dict[str, object]](),
+            "1": ServiceLinkedList[dict[str, object]](),
+            "2": ServiceLinkedList[dict[str, object]](),
+            "3": ServiceLinkedList[dict[str, object]](),
         }
         self.in_progress_by_counter: dict[str, dict[str, object] | None] = {
             counter_id: None for counter_id in self.counter_lists
@@ -295,19 +295,20 @@ class QueueLessState:
     def _recommend_counter(self, service_id: str) -> dict[str, object]:
         queue_wait = {}
         for code, counter_name in (
-            ("C1", "counter_1"),
-            ("C2", "counter_2"),
-            ("C3", "counter_3"),
+            ("1", "counter_1"),
+            ("2", "counter_2"),
+            ("3", "counter_3"),
         ):
             queue_wait[counter_name] = self.counter_lists[code].length
         available = [
-            "counter_1" if self.counter_status["C1"] == "OPEN" else "",
-            "counter_2" if self.counter_status["C2"] == "OPEN" else "",
-            "counter_3" if self.counter_status["C3"] == "OPEN" else "",
+            "counter_1" if self.counter_status["1"] == "OPEN" else "",
+            "counter_2" if self.counter_status["2"] == "OPEN" else "",
+            "counter_3" if self.counter_status["3"] == "OPEN" else "",
         ]
         available = [counter for counter in available if counter]
         if not available:
             raise HTTPException(status_code=409, detail="No counter is open")
+        estimated_durations = self.services[service_id]["estimated_durations_min"]
         graph = ServiceStateGraph(
             queue_wait={
                 counter: float(queue_wait[counter])
@@ -315,7 +316,13 @@ class QueueLessState:
             },
             transition_overhead=1.0,
             available_counters=available,
-            service_duration=self.services[service_id]["estimated_durations_min"],
+            service_duration={
+                counter: {
+                    stage.strip().lower().replace(" ", "_"): float(duration)
+                    for stage, duration in estimated_durations.items()
+                }
+                for counter in available
+            },
         )
         self.service_graph = graph
         result = a_star_search(graph, "waiting_queue", "service_completion")
@@ -329,10 +336,10 @@ class QueueLessState:
             None,
         )
         counter_id = {
-            "counter_1": "C1",
-            "counter_2": "C2",
-            "counter_3": "C3",
-        }.get(str(counter_internal), "C1")
+            "counter_1": "1",
+            "counter_2": "2",
+            "counter_3": "3",
+        }.get(str(counter_internal), "1")
         return {
             "counter_id": counter_id,
             "optimal_path": path,
