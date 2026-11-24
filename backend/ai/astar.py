@@ -14,10 +14,17 @@ def a_star_search(
     graph: ServiceStateGraph | Mapping[str, Sequence[GraphEdge]],
     start_state: str,
     goal_state: str,
-    heuristic: Callable[[str], float],
+    heuristic: Callable[[str], float] | None = None,
 ) -> dict[str, object]:
+    """Run A* using an admissible minimum-remaining-stage heuristic."""
+
+    if heuristic is None:
+        heuristic = _minimum_remaining_stage_duration
+    heuristic_values: dict[str, float] = {}
+    trace_steps: list[dict[str, object]] = []
+    heuristic_values[start_state] = heuristic(start_state)
     heap: list[tuple[float, float, int, str]] = [
-        (heuristic(start_state), 0.0, 0, start_state)
+        (heuristic_values[start_state], 0.0, 0, start_state)
     ]
     insertion_order = 1
     best_cost: dict[str, float] = {start_state: 0.0}
@@ -36,11 +43,24 @@ def a_star_search(
                 path.append(current)
                 current = parent[current]
             path.reverse()
+            trace_steps.append(
+                {
+                    "step": len(trace_steps),
+                    "current_node": node,
+                    "frontier": [
+                        item[3] for item in heap
+                    ],
+                    "visited": list(best_cost),
+                    "action": "goal_test",
+                }
+            )
             return {
                 "algorithm": "A*",
                 "optimal_path": path,
                 "total_cost": cost,
                 "nodes_expanded": nodes_expanded,
+                "heuristic_values": heuristic_values,
+                "trace_steps": trace_steps,
             }
         for edge in _neighbors(graph, node):
             if edge.cost < 0:
@@ -49,9 +69,11 @@ def a_star_search(
             if new_cost < best_cost.get(edge.target, float("inf")):
                 best_cost[edge.target] = new_cost
                 parent[edge.target] = node
+                edge_heuristic = heuristic(edge.target)
+                heuristic_values[edge.target] = edge_heuristic
                 heap.append(
                     (
-                        new_cost + heuristic(edge.target),
+                        new_cost + edge_heuristic,
                         new_cost,
                         insertion_order,
                         edge.target,
@@ -59,12 +81,43 @@ def a_star_search(
                 )
                 insertion_order += 1
                 heap.sort()
+        trace_steps.append(
+            {
+                "step": len(trace_steps),
+                "current_node": node,
+                "frontier": [item[3] for item in heap],
+                "visited": list(best_cost),
+                "action": "expand_neighbors",
+            }
+        )
     return {
         "algorithm": "A*",
         "optimal_path": [],
         "total_cost": None,
         "nodes_expanded": nodes_expanded,
+        "heuristic_values": heuristic_values,
+        "trace_steps": trace_steps,
     }
+
+
+def _minimum_remaining_stage_duration(node: str) -> float:
+    """Estimate cost as the fastest remaining laboratory stages.
+
+    The default values correspond to Counter 3, whose specified durations are
+    minimum for Registration, Sample Collection, and Report Collection.
+    """
+
+    if node == "service_completion":
+        return 0.0
+    if node == "waiting_queue":
+        return 3.0 + 6.0 + 1.0
+    if node.endswith(".registration"):
+        return 6.0 + 1.0
+    if node.endswith(".sample_collection"):
+        return 1.0
+    if node.endswith(".report_collection"):
+        return 0.0
+    return 0.0
 
 
 def _neighbors(

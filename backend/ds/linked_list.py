@@ -2,17 +2,26 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from typing import Generic, TypeVar
 
 
 T = TypeVar("T")
 
 
-class LinkedNode(Generic[T]):
-    def __init__(self, item: T) -> None:
-        self.item = item
-        self.next: LinkedNode[T] | None = None
+class Node(Generic[T]):
+    """Singly linked node."""
+
+    def __init__(self, data: T, next: "Node[T] | None" = None) -> None:
+        self.data = data
+        self.next = next
+
+    @property
+    def item(self) -> T:
+        return self.data
+
+
+LinkedNode = Node
 
 
 class ServiceLinkedList(Generic[T]):
@@ -25,8 +34,95 @@ class ServiceLinkedList(Generic[T]):
     def size(self) -> int:
         return self._size
 
+    @property
+    def length(self) -> int:
+        """Return the number of nodes in the list."""
+
+        return self._size
+
+    def insert_head(self, data: T) -> None:
+        """Insert data before the current head."""
+
+        node = Node(data, self.head)
+        self.head = node
+        if self.tail is None:
+            self.tail = node
+        self._size += 1
+
+    def insert_tail(self, data: T) -> None:
+        """Append data to the end of the list."""
+
+        node = Node(data)
+        if self.tail is None:
+            self.head = node
+            self.tail = node
+        else:
+            self.tail.next = node
+            self.tail = node
+        self._size += 1
+
+    def insert_at(self, pos: int, data: T) -> None:
+        """Insert data at a zero-based position."""
+
+        if pos < 0 or pos > self._size:
+            raise IndexError("linked-list position out of range")
+        if pos == 0:
+            self.insert_head(data)
+            return
+        if pos == self._size:
+            self.insert_tail(data)
+            return
+        previous = self.head
+        position = 0
+        while previous is not None and position < pos - 1:
+            previous = previous.next
+            position += 1
+        if previous is None:
+            raise RuntimeError("linked-list invariant violated")
+        previous.next = Node(data, previous.next)
+        self._size += 1
+
+    def search(self, token_id: str) -> T | None:
+        """Return payload whose token_id matches."""
+
+        current = self.head
+        while current is not None:
+            if self._token_id(current.data) == token_id:
+                return current.data
+            current = current.next
+        return None
+
+    def delete_by_token_id(self, token_id: str) -> T:
+        """Delete and return the first node matching token_id."""
+
+        if self.head is None:
+            raise KeyError(token_id)
+        if self._token_id(self.head.data) == token_id:
+            return self.pop_front()
+        previous = self.head
+        while previous.next is not None:
+            if self._token_id(previous.next.data) == token_id:
+                removed = previous.next
+                previous.next = removed.next
+                if removed is self.tail:
+                    self.tail = previous
+                removed.next = None
+                self._size -= 1
+                return removed.data
+            previous = previous.next
+        raise KeyError(token_id)
+
+    @staticmethod
+    def _token_id(data: object) -> str | None:
+        if hasattr(data, "token_id"):
+            return str(getattr(data, "token_id"))
+        if isinstance(data, dict):
+            value = data.get("token_id")
+            return str(value) if value is not None else None
+        return None
+
     def append(self, item: T) -> None:
-        node = LinkedNode(item)
+        node = Node(item)
         if self.tail is None:
             self.head = node
             self.tail = node

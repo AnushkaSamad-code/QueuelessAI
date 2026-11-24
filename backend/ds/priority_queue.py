@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Generic, Iterable, TypeVar
+from typing import Generic, TypeVar
 
 
 T = TypeVar("T")
@@ -31,6 +31,29 @@ class SchedulingPriorityQueue(Generic[T]):
     @property
     def size(self) -> int:
         return self._size
+
+    def enqueue(
+        self,
+        item: T,
+        token_id: str,
+        base_priority: int,
+        arrival_timestamp: datetime,
+    ) -> None:
+        """Add a scheduled token using the Ubaid queue API."""
+
+        self.insert(
+            ScheduledToken(
+                item=item,
+                token_id=token_id,
+                base_priority=base_priority,
+                arrival_timestamp=arrival_timestamp,
+            )
+        )
+
+    def dequeue(self, current_time: datetime | None = None) -> ScheduledToken[T]:
+        """Apply aging if requested, then remove the minimum."""
+
+        return self.extract_min(current_time)
 
     def insert(self, item: ScheduledToken[T]) -> None:
         if item.token_id in self._positions:
@@ -71,6 +94,61 @@ class SchedulingPriorityQueue(Generic[T]):
         self._sift_down(0)
         return minimum
 
+    def update_priority(self, token_id: str, new_base_priority: int) -> None:
+        """Change a token's base priority and restore heap order."""
+
+        index = self._positions.get(token_id)
+        if index is None:
+            raise KeyError(token_id)
+        item = self._heap[index]
+        if item is None:
+            raise RuntimeError("priority queue invariant violated")
+        replacement = ScheduledToken(
+            item=item.item,
+            token_id=item.token_id,
+            base_priority=new_base_priority,
+            arrival_timestamp=item.arrival_timestamp,
+        )
+        self._heap[index] = replacement
+        self._sift_up(index)
+        self._sift_down(index)
+
+    def apply_aging(
+        self,
+        current_time: datetime,
+        threshold_min: int = 15,
+    ) -> None:
+        """Apply elapsed-threshold aging and restore heap ordering.
+
+        ``threshold_min`` updates the aging interval for this operation.
+        """
+
+        if threshold_min <= 0:
+            raise ValueError("threshold_min must be positive")
+        self.aging_interval_minutes = threshold_min
+        self.refresh_aging(current_time)
+
+    def to_heap_snapshot(self, current_time: datetime | None = None) -> list[dict[str, object]]:
+        """Return array-index heap contents for visualization."""
+
+        now = current_time or datetime.now()
+        snapshot: list[dict[str, object]] = []
+        index = 0
+        while index < self._size:
+            item = self._heap[index]
+            if item is not None:
+                snapshot.append(
+                    {
+                        "index": index,
+                        "token_id": item.token_id,
+                        "base_priority": item.base_priority,
+                        "effective_priority": self.effective_priority(item, now),
+                        "arrival_timestamp": item.arrival_timestamp.isoformat(),
+                    }
+                )
+            index += 1
+        return snapshot
+
     def effective_priority(self, item: ScheduledToken[T], now: datetime) -> int:
         elapsed_seconds = (now - item.arrival_timestamp).total_seconds()
         elapsed_minutes = max(0.0, elapsed_seconds / 60.0)
@@ -86,6 +164,33 @@ class SchedulingPriorityQueue(Generic[T]):
 
     def contains(self, token_id: str) -> bool:
         return token_id in self._positions
+
+    def remove(self, token_id: str) -> ScheduledToken[T]:
+        """Remove a token by identifier and restore heap order."""
+
+        index = self._positions.get(token_id)
+        if index is None:
+            raise KeyError(token_id)
+        removed = self._heap[index]
+        if removed is None:
+            raise RuntimeError("priority queue invariant violated")
+        del self._positions[token_id]
+        last_index = self._size - 1
+        if index == last_index:
+            self._heap[index] = None
+            self._size -= 1
+            self._rebuild_positions()
+            return removed
+        last = self._heap[last_index]
+        self._heap[index] = last
+        self._heap[last_index] = None
+        self._size -= 1
+        if last is not None:
+            self._positions[last.token_id] = index
+        self._sift_down(index)
+        self._sift_up(index)
+        self._rebuild_positions()
+        return removed
 
     def heap_snapshot(self, now: datetime) -> list[tuple[str, int, datetime]]:
         snapshot: list[tuple[str, int, datetime]] = []
