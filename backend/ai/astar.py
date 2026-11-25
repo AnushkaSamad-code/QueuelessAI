@@ -6,17 +6,17 @@ from collections.abc import Callable, Mapping, Sequence
 
 try:
     from .graph_model import (
-        DEFAULT_DURATIONS,
-        SERVICE_STAGES,
         GraphEdge,
         ServiceStateGraph,
+        SERVICE_ROUTE_STAGES,
+        minimum_remaining_stage_duration,
     )
 except ImportError:
     from ai.graph_model import (
-        DEFAULT_DURATIONS,
-        SERVICE_STAGES,
         GraphEdge,
         ServiceStateGraph,
+        SERVICE_ROUTE_STAGES,
+        minimum_remaining_stage_duration,
     )
 
 
@@ -115,46 +115,24 @@ def _minimum_remaining_stage_duration(
     graph: ServiceStateGraph | Mapping[str, Sequence[GraphEdge]],
     node_id: str,
 ) -> float:
-    """Sum per-stage minimum service durations for stages not yet completed."""
+    """Sum minimum durations for the remaining stages in the route graph."""
 
-    if node_id == "service_completion":
+    if isinstance(graph, ServiceStateGraph):
+        return minimum_remaining_stage_duration(
+            node_id,
+            graph.service_duration["service"],
+        )
+    if node_id not in SERVICE_ROUTE_STAGES:
         return 0.0
-    if node_id == "waiting_queue":
-        remaining_stages = SERVICE_STAGES
-    else:
-        if isinstance(graph, ServiceStateGraph):
-            graph_node = graph.nodes.get(node_id)
-            if graph_node is None or graph_node.stage not in SERVICE_STAGES:
-                return 0.0
-            remaining_stages = SERVICE_STAGES[
-                SERVICE_STAGES.index(graph_node.stage) + 1 :
-            ]
-        else:
-            _, separator, stage = node_id.partition(".")
-            if not separator or stage not in SERVICE_STAGES:
-                return 0.0
-            remaining_stages = SERVICE_STAGES[SERVICE_STAGES.index(stage) + 1 :]
-
-    durations = (
-        graph.service_duration
-        if isinstance(graph, ServiceStateGraph)
-        else DEFAULT_DURATIONS
-    )
-    counter_ids = (
-        graph.available_counters
-        if isinstance(graph, ServiceStateGraph)
-        else tuple(durations)
-    )
     estimate = 0.0
-    for stage in remaining_stages:
-        stage_durations = [
-            durations[counter][stage]
-            for counter in counter_ids
-            if counter in durations and stage in durations[counter]
-        ]
-        if not stage_durations:
+    current = node_id
+    while current != SERVICE_ROUTE_STAGES[-1]:
+        outgoing = graph.get(current, ())
+        if not outgoing:
             return 0.0
-        estimate += min(stage_durations)
+        edge = min(outgoing, key=lambda candidate: candidate.cost)
+        estimate += edge.cost
+        current = edge.target
     return estimate
 
 

@@ -1,10 +1,10 @@
-"""Weighted directed service graph model."""
+"""Diagnostic service-route graph used by Problem A search."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Iterable, Mapping
+from typing import Mapping
 
 
 class LifecycleState(str, Enum):
@@ -16,18 +16,21 @@ class LifecycleState(str, Enum):
     S6_COMPLETED = "S6_COMPLETED"
 
 
-COUNTER_IDS = ("counter_1", "counter_2", "counter_3")
-SERVICE_STAGES = ("registration", "sample_collection", "report_collection")
-
-DEFAULT_DURATIONS: dict[str, dict[str, float]] = {
-    "counter_1": {"registration": 5.0, "sample_collection": 8.0, "report_collection": 2.0},
-    "counter_2": {"registration": 4.0, "sample_collection": 7.0, "report_collection": 2.0},
-    "counter_3": {"registration": 3.0, "sample_collection": 6.0, "report_collection": 1.0},
-}
-DEFAULT_QUEUE_WAIT: dict[str, float] = {
-    "counter_1": 15.0,
-    "counter_2": 12.0,
-    "counter_3": 10.0,
+SERVICE_ROUTE_STAGES = (
+    "Registration",
+    "Sample Collection",
+    "Report Collection",
+    "Service Completed",
+)
+SERVICE_STAGE_KEYS = (
+    "registration",
+    "sample_collection",
+    "report_collection",
+)
+DEFAULT_STAGE_DURATIONS: dict[str, float] = {
+    "registration": 5.0,
+    "sample_collection": 8.0,
+    "report_collection": 3.0,
 }
 
 
@@ -49,29 +52,89 @@ class GraphNode:
     stage: str | None = None
 
 
+def build_service_route_graph(
+    durations: Mapping[str, float] | None = None,
+) -> dict[str, tuple[GraphEdge, ...]]:
+    """Build the same weighted, linear route for BFS, UCS, and A*."""
+
+    stage_durations = dict(DEFAULT_STAGE_DURATIONS)
+    if durations is not None:
+        stage_durations.update(
+            {stage: float(durations[stage]) for stage in SERVICE_STAGE_KEYS if stage in durations}
+        )
+    graph: dict[str, tuple[GraphEdge, ...]] = {}
+    for index, stage in enumerate(SERVICE_ROUTE_STAGES):
+        if index + 1 == len(SERVICE_ROUTE_STAGES):
+            graph[stage] = ()
+            continue
+        next_stage = SERVICE_ROUTE_STAGES[index + 1]
+        graph[stage] = (
+            GraphEdge(
+                target=next_stage,
+                action=f"complete_{SERVICE_STAGE_KEYS[index]}",
+                cost=stage_durations[SERVICE_STAGE_KEYS[index]],
+            ),
+        )
+    return graph
+
+
+def minimum_remaining_stage_duration(
+    node: str,
+    durations: Mapping[str, float] | None = None,
+) -> float:
+    """Sum minimum durations for each remaining stage; zero at the goal."""
+
+    stage_durations = dict(DEFAULT_STAGE_DURATIONS)
+    if durations is not None:
+        stage_durations.update(
+            {stage: float(durations[stage]) for stage in SERVICE_STAGE_KEYS if stage in durations}
+        )
+    if node == SERVICE_ROUTE_STAGES[-1]:
+        return 0.0
+    try:
+        stage_index = SERVICE_ROUTE_STAGES.index(node)
+    except ValueError:
+        return 0.0
+    return sum(
+        stage_durations[stage]
+        for stage in SERVICE_STAGE_KEYS[stage_index:]
+    )
+
+
 class ServiceStateGraph:
+    """Compatibility wrapper around the service-stage-only adjacency graph."""
+
     def __init__(
         self,
         queue_wait: Mapping[str, float] | None = None,
         service_duration: Mapping[str, Mapping[str, float]] | None = None,
-        transition_overhead: float = 1.0,
-        available_counters: Iterable[str] = COUNTER_IDS,
+        transition_overhead: float = 0.0,
+        available_counters: object = None,
     ) -> None:
+        del queue_wait, available_counters
         if transition_overhead < 0:
             raise ValueError("transition_overhead must be non-negative")
-        self.queue_wait = dict(queue_wait or DEFAULT_QUEUE_WAIT)
-        source_durations = service_duration or DEFAULT_DURATIONS
-        self.service_duration = {
-            counter: dict(durations)
-            for counter, durations in source_durations.items()
+        durations = DEFAULT_STAGE_DURATIONS
+        if service_duration:
+            durations = next(iter(service_duration.values()))
+        self.service_duration = {"service": dict(durations)}
+        self.available_counters: tuple[str, ...] = ()
+        self.adjacency = build_service_route_graph(durations)
+        self.nodes = {
+            stage: GraphNode(
+                node_id=stage,
+                label=stage,
+                x=float(index * 210 + 110),
+                y=100.0,
+                lifecycle_state=(
+                    LifecycleState.S6_COMPLETED
+                    if stage == SERVICE_ROUTE_STAGES[-1]
+                    else LifecycleState.S5_IN_PROGRESS
+                ),
+                stage=SERVICE_STAGE_KEYS[index] if index < len(SERVICE_STAGE_KEYS) else None,
+            )
+            for index, stage in enumerate(SERVICE_ROUTE_STAGES)
         }
-        self.transition_overhead = transition_overhead
-        self.available_counters = tuple(
-            counter for counter in available_counters if counter in COUNTER_IDS
-        )
-        self.nodes: dict[str, GraphNode] = {}
-        self.adjacency: dict[str, tuple[GraphEdge, ...]] = {}
-        self._build()
 
     def neighbors(self, node_id: str) -> tuple[GraphEdge, ...]:
         return self.adjacency.get(node_id, ())
@@ -79,17 +142,11 @@ class ServiceStateGraph:
     def rebuild(
         self,
         queue_wait: Mapping[str, float] | None = None,
-        available_counters: Iterable[str] | None = None,
+        available_counters: object = None,
     ) -> None:
-        if queue_wait is not None:
-            self.queue_wait = dict(queue_wait)
-        if available_counters is not None:
-            self.available_counters = tuple(
-                counter for counter in available_counters if counter in COUNTER_IDS
-            )
-        self.nodes.clear()
-        self.adjacency.clear()
-        self._build()
+        del queue_wait, available_counters
+        durations = self.service_duration["service"]
+        self.adjacency = build_service_route_graph(durations)
 
     def export_visualization(self) -> dict[str, list[dict[str, object]]]:
         nodes = [
@@ -99,15 +156,15 @@ class ServiceStateGraph:
                 "x": node.x,
                 "y": node.y,
                 "lifecycle_state": node.lifecycle_state.value,
-                "counter_id": node.counter_id,
+                "counter_id": None,
                 "stage": node.stage,
             }
             for node in self.nodes.values()
         ]
         edges: list[dict[str, object]] = []
         for source, outgoing in self.adjacency.items():
-            source_node = self.nodes[source]
             for edge in outgoing:
+                source_node = self.nodes[source]
                 target_node = self.nodes[edge.target]
                 edges.append(
                     {
@@ -123,78 +180,6 @@ class ServiceStateGraph:
                 )
         return {"nodes": nodes, "edges": edges}
 
-    def _build(self) -> None:
-        self._add_node(
-            GraphNode("waiting_queue", "Waiting Queue", 0.0, 0.0, LifecycleState.S3_WAITING)
-        )
-        self._add_node(
-            GraphNode(
-                "service_completion",
-                "Service Completion",
-                8.0,
-                0.0,
-                LifecycleState.S6_COMPLETED,
-            )
-        )
-        for index, counter in enumerate(self.available_counters):
-            x = float(index * 3 + 1)
-            for stage_index, stage in enumerate(SERVICE_STAGES):
-                node_id = f"{counter}.{stage}"
-                self._add_node(
-                    GraphNode(
-                        node_id,
-                        f"{counter.replace('_', ' ').title()}: {stage.replace('_', ' ').title()}",
-                        x + stage_index * 0.25,
-                        float(index + 1),
-                        LifecycleState.S5_IN_PROGRESS,
-                        counter,
-                        stage,
-                    )
-                )
 
-        for counter in self.available_counters:
-            first_node = f"{counter}.{SERVICE_STAGES[0]}"
-            self._add_edge(
-                "waiting_queue",
-                GraphEdge(
-                    first_node,
-                    f"assign_{counter}",
-                    self.queue_wait.get(counter, 0.0)
-                    + self.service_duration[counter][SERVICE_STAGES[0]]
-                    + self.transition_overhead,
-                ),
-            )
-            for index, stage in enumerate(SERVICE_STAGES):
-                current = f"{counter}.{stage}"
-                if index + 1 < len(SERVICE_STAGES):
-                    next_stage = f"{counter}.{SERVICE_STAGES[index + 1]}"
-                    self._add_edge(
-                        current,
-                        GraphEdge(
-                            next_stage,
-                            f"complete_{stage}",
-                            self.service_duration[counter][SERVICE_STAGES[index + 1]]
-                            + self.transition_overhead,
-                        ),
-                    )
-                else:
-                    self._add_edge(
-                        current,
-                        GraphEdge(
-                            "service_completion",
-                            "complete_service",
-                            self.transition_overhead,
-                        ),
-                    )
-
-    def _add_node(self, node: GraphNode) -> None:
-        self.nodes[node.node_id] = node
-        self.adjacency.setdefault(node.node_id, ())
-
-    def _add_edge(self, source: str, edge: GraphEdge) -> None:
-        if edge.cost < 0:
-            raise ValueError("graph edge cost must be non-negative")
-        self.adjacency[source] = self.adjacency[source] + (edge,)
-
-
-service_graph: dict[str, tuple[GraphEdge, ...]] = ServiceStateGraph().adjacency
+SERVICE_ROUTE_GRAPH = build_service_route_graph()
+service_graph = SERVICE_ROUTE_GRAPH
