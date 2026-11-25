@@ -117,15 +117,37 @@ The API documentation is available at `http://127.0.0.1:8000/docs`.
 
 ```powershell
 cd frontend
+# Optional: copy .env.example to .env.local to override the API URL
 npm install
 npm run dev
 ```
 
 The Vite development server normally serves the interface at `http://127.0.0.1:5173`.
+The frontend connects to `http://localhost:8000` by default; set `VITE_API_URL` in
+`frontend/.env.local` when the FastAPI server is hosted elsewhere.
 
 ### Database
 
 Version 1.0 uses SQLite in `backend/data/queueless.db`. Schema initialization must create tables, constraints, and indexes before the API accepts requests. Backups should copy the database file while the service is stopped.
+
+### Demo accounts and workspaces
+
+The customer portal is available to guests and signed-in customers. Staff and Admin
+accounts unlock the Operations + Academic Demo Workspace; backend endpoints for
+operational state, counter workflows, reports, and academic visualizers enforce the
+same role boundary.
+
+| Role | Email | Password |
+| --- | --- | --- |
+| Admin | `admin@queueless.ai` | `admin123` |
+| Staff | `staff@queueless.ai` | `staff123` |
+| Customer | `patient@queueless.ai` | `patient123` |
+
+The AI Search page treats the diagnostic stage route as Problem A and compares
+BFS, UCS, and A* on the selected service's stage-duration graph. Deterministic
+service-compatible counter assignment is Problem B and is not part of that graph.
+Counter operations use separate Call Next, Start Service (S4 → S5), and Complete
+Service (S5 → S6) actions.
 
 ## Documentation Index
 
