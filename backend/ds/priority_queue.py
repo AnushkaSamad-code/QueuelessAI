@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import ctypes
+from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Generic, TypeVar
@@ -23,10 +25,9 @@ class SchedulingPriorityQueue(Generic[T]):
         if aging_interval_minutes <= 0:
             raise ValueError("aging interval must be positive")
         self.aging_interval_minutes = aging_interval_minutes
-        self._heap: list[ScheduledToken[T] | None] = [None] * 16
+        self._heap = self._allocate_storage(16)
         self._capacity = 16
         self._size = 0
-        self._positions: dict[str, int] = {}
         self._aging_time: datetime | None = None
 
     @property
@@ -57,11 +58,10 @@ class SchedulingPriorityQueue(Generic[T]):
         return self.extract_min(current_time)
 
     def insert(self, item: ScheduledToken[T]) -> None:
-        if item.token_id in self._positions:
+        if self._find_index(item.token_id) is not None:
             raise ValueError("duplicate scheduled token")
         self._ensure_capacity(self._size + 1)
         self._heap[self._size] = item
-        self._positions[item.token_id] = self._size
         self._sift_up(self._size)
         self._size += 1
 
@@ -83,7 +83,6 @@ class SchedulingPriorityQueue(Generic[T]):
         minimum = self._heap[0]
         if minimum is None:
             raise RuntimeError("priority queue invariant violated")
-        del self._positions[minimum.token_id]
         if self._size == 1:
             self._heap[0] = None
             self._size = 0
@@ -92,15 +91,13 @@ class SchedulingPriorityQueue(Generic[T]):
         self._heap[0] = last
         self._heap[self._size - 1] = None
         self._size -= 1
-        if last is not None:
-            self._positions[last.token_id] = 0
         self._sift_down(0)
         return minimum
 
     def update_priority(self, token_id: str, new_base_priority: int) -> None:
         """Change a token's base priority and restore heap order."""
 
-        index = self._positions.get(token_id)
+        index = self._find_index(token_id)
         if index is None:
             raise KeyError(token_id)
         item = self._heap[index]
@@ -162,33 +159,28 @@ class SchedulingPriorityQueue(Generic[T]):
         self._aging_time = now
         for index in range(self._size // 2 - 1, -1, -1):
             self._sift_down(index, now)
-        self._rebuild_positions()
 
     def contains(self, token_id: str) -> bool:
-        return token_id in self._positions
+        return self._find_index(token_id) is not None
 
     def remove(self, token_id: str) -> ScheduledToken[T]:
         """Remove a token by identifier and restore heap order."""
 
-        index = self._positions.get(token_id)
+        index = self._find_index(token_id)
         if index is None:
             raise KeyError(token_id)
         removed = self._heap[index]
         if removed is None:
             raise RuntimeError("priority queue invariant violated")
-        del self._positions[token_id]
         last_index = self._size - 1
         if index == last_index:
             self._heap[index] = None
             self._size -= 1
-            self._rebuild_positions()
             return removed
         last = self._heap[last_index]
         self._heap[index] = last
         self._heap[last_index] = None
         self._size -= 1
-        if last is not None:
-            self._positions[last.token_id] = index
         self._restore_heap(index)
         return removed
 
@@ -204,7 +196,22 @@ class SchedulingPriorityQueue(Generic[T]):
             index += 1
         return snapshot
 
-    def _key(self, item: ScheduledToken[T], now: datetime | None) -> tuple[int, datetime]:
+    def traverse_heap(self) -> Iterator[ScheduledToken[T]]:
+        """Yield entries in their current heap-array order."""
+
+        index = 0
+        while index < self._size:
+            item = self._heap[index]
+            if item is None:
+                raise RuntimeError("priority queue invariant violated")
+            yield item
+            index += 1
+
+    def _key(
+        self,
+        item: ScheduledToken[T],
+        now: datetime | None,
+    ) -> tuple[int, datetime, str]:
         effective = item.base_priority
         comparison_time = now if now is not None else self._aging_time
         if comparison_time is not None:
@@ -213,7 +220,7 @@ class SchedulingPriorityQueue(Generic[T]):
                 (comparison_time - item.arrival_timestamp).total_seconds() / 60.0,
             )
             effective -= int(elapsed // self.aging_interval_minutes)
-        return effective, item.arrival_timestamp
+        return effective, item.arrival_timestamp, item.token_id
 
     def _sift_up(self, index: int) -> None:
         while index > 0:
@@ -225,8 +232,6 @@ class SchedulingPriorityQueue(Generic[T]):
             if self._key(child_item, None) >= self._key(parent_item, None):
                 break
             self._heap[index], self._heap[parent] = parent_item, child_item
-            self._positions[child_item.token_id] = parent
-            self._positions[parent_item.token_id] = index
             index = parent
 
     def _restore_heap(self, index: int) -> None:
@@ -263,17 +268,13 @@ class SchedulingPriorityQueue(Generic[T]):
             current_item = self._heap[index]
             smallest_item = self._heap[smallest]
             self._heap[index], self._heap[smallest] = smallest_item, current_item
-            if current_item is not None:
-                self._positions[current_item.token_id] = smallest
-            if smallest_item is not None:
-                self._positions[smallest_item.token_id] = index
             index = smallest
 
     def _ensure_capacity(self, required_size: int) -> None:
         if required_size <= self._capacity:
             return
         new_capacity = self._capacity * 2
-        new_storage: list[ScheduledToken[T] | None] = [None] * new_capacity
+        new_storage = self._allocate_storage(new_capacity)
         index = 0
         while index < self._size:
             new_storage[index] = self._heap[index]
@@ -281,11 +282,21 @@ class SchedulingPriorityQueue(Generic[T]):
         self._heap = new_storage
         self._capacity = new_capacity
 
-    def _rebuild_positions(self) -> None:
-        self._positions.clear()
+    def _find_index(self, token_id: str) -> int | None:
         index = 0
         while index < self._size:
             item = self._heap[index]
-            if item is not None:
-                self._positions[item.token_id] = index
+            if item is not None and item.token_id == token_id:
+                return index
             index += 1
+        return None
+
+    @staticmethod
+    def _allocate_storage(capacity: int) -> ctypes.Array:
+        storage_type = ctypes.py_object * capacity
+        storage = storage_type()
+        index = 0
+        while index < capacity:
+            storage[index] = None
+            index += 1
+        return storage

@@ -146,6 +146,12 @@ def test_ut_06_priority_queue_heap_order_and_ties() -> None:
     assert queue.extract_min(now).token_id == "Q102"
     assert queue.extract_min(now).token_id == "Q103"
 
+    same_arrival_queue = SchedulingPriorityQueue[ArrayToken]()
+    same_arrival_queue.insert(ScheduledToken(ArrayToken("Q102"), "Q102", 2, now))
+    same_arrival_queue.insert(ScheduledToken(ArrayToken("Q101"), "Q101", 2, now))
+    assert same_arrival_queue.extract_min(now).token_id == "Q101"
+    assert same_arrival_queue.extract_min(now).token_id == "Q102"
+
     duplicate_queue = SchedulingPriorityQueue[ArrayToken]()
     duplicate_queue.insert(ScheduledToken(ArrayToken("Q101"), "Q101", 0, now))
     try:
@@ -250,6 +256,17 @@ def test_ut_10_bfs_shallowest_path_and_unreachable_goal() -> None:
     missing = breadth_first_search(graph, "start", "unreachable")
     assert missing["optimal_path"] == []
     assert missing["total_cost"] is None
+    missing_ucs = uniform_cost_search(graph, "start", "unreachable")
+    assert missing_ucs["optimal_path"] == []
+    assert missing_ucs["total_cost"] is None
+    missing_astar = a_star_search(
+        graph,
+        "start",
+        "unreachable",
+        lambda _node: 0.0,
+    )
+    assert missing_astar["optimal_path"] == []
+    assert missing_astar["total_cost"] is None
 
 
 def test_ut_11_ucs_returns_weighted_optimal_route() -> None:

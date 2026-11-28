@@ -1,5 +1,8 @@
 import type {
   AuthResponse,
+  DSOperationResult,
+  DSPlaygroundSnapshot,
+  BookResponse,
   Counter,
   InspectorSnapshot,
   ReportSummary,
@@ -110,6 +113,62 @@ export function getInspector(): Promise<InspectorSnapshot> {
   return request<InspectorSnapshot>("/api/ds/inspect");
 }
 
+export function getDSPlayground(): Promise<DSPlaygroundSnapshot> {
+  return request<DSPlaygroundSnapshot>("/api/ds/playground");
+}
+
+export function operateDSArray(input: {
+  operation: "insert" | "delete" | "search" | "update" | "traverse";
+  value?: string;
+  index?: number;
+}): Promise<DSOperationResult> {
+  return request<DSOperationResult>("/api/ds/playground/array", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function operateDSLinkedList(input: {
+  operation:
+    | "insert_beginning"
+    | "insert_end"
+    | "insert_position"
+    | "delete"
+    | "search"
+    | "traverse";
+  value?: string;
+  position?: number;
+  item_id?: string;
+}): Promise<DSOperationResult> {
+  return request<DSOperationResult>("/api/ds/playground/linked-list", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function operateDSPriorityQueue(input: {
+  operation: "enqueue" | "dequeue" | "peek" | "update_priority" | "display";
+  value?: string;
+  priority?: number;
+  item_id?: string;
+}): Promise<DSOperationResult> {
+  return request<DSOperationResult>("/api/ds/playground/priority-queue", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function operateDSBST(input: {
+  operation: "insert" | "search" | "delete" | "inorder" | "preorder" | "postorder";
+  key?: string;
+  value?: string;
+}): Promise<DSOperationResult> {
+  return request<DSOperationResult>("/api/ds/playground/bst", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
 export function getCounters(): Promise<Counter[]> {
   return request<Counter[]>("/api/counters");
 }
@@ -121,9 +180,8 @@ export function getReports(): Promise<ReportSummary> {
 export function bookToken(input: {
   customer_name: string;
   service_id: string;
-  priority_level: "STANDARD" | "APPOINTMENT" | "PRIORITY";
-}): Promise<{ token: Token; recommendation: { optimal_path: string[]; total_cost: number } }> {
-  return request("/api/tokens/book", {
+}): Promise<BookResponse> {
+  return request<BookResponse>("/api/tokens/book", {
     method: "POST",
     body: JSON.stringify(input),
   });
@@ -203,10 +261,13 @@ export function updateCounter(
   });
 }
 
-export function compareRoute(serviceId: string): Promise<SearchComparison> {
+export function compareRoute(
+  serviceId: string,
+  goalState: string,
+): Promise<SearchComparison> {
   return request<SearchComparison>("/api/ai/compare", {
     method: "POST",
-    body: JSON.stringify({ service_id: serviceId }),
+    body: JSON.stringify({ service_id: serviceId, goal_state: goalState }),
   });
 }
 
@@ -215,7 +276,7 @@ export function statusLabel(status: string): string {
     S3_WAITING: "Waiting",
     S4_COUNTER_ASSIGNED: "Called",
     S5_IN_PROGRESS: "In progress",
-    S6_COMPLETED: "Completed",
+    S6_COMPLETED: "Service Completed",
   };
   return labels[status] ?? status.replaceAll("_", " ").toLowerCase();
 }

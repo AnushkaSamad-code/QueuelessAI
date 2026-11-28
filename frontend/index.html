@@ -3,7 +3,15 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#09090b" />
+    <meta name="theme-color" content="#f7f8fc" />
+    <script>
+      try {
+        document.documentElement.dataset.theme =
+          localStorage.getItem("queueless-theme") === "dark" ? "dark" : "light";
+      } catch {
+        document.documentElement.dataset.theme = "light";
+      }
+    </script>
     <meta
       name="description"
       content="QueueLess AI diagnostic appointment and service queue management."

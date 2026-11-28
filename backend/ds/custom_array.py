@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ctypes
 from collections.abc import Callable, Iterator
 from dataclasses import asdict, is_dataclass
 from typing import Generic, TypeVar
@@ -16,7 +17,8 @@ class _ManualArray(Generic[T]):
             raise ValueError("capacity must be positive")
         if maximum_capacity is not None and maximum_capacity < capacity:
             raise ValueError("maximum_capacity cannot be smaller than capacity")
-        self._storage: list[T | None] = [None] * capacity
+        self._storage = self._allocate_storage(capacity)
+        self._capacity = capacity
         self._capacity_limit = maximum_capacity
         self._size = 0
 
@@ -26,7 +28,7 @@ class _ManualArray(Generic[T]):
 
     @property
     def capacity(self) -> int:
-        return len(self._storage)
+        return self._capacity
 
     def insert_at(self, index: int, item: T) -> None:
         if item is None:
@@ -101,12 +103,23 @@ class _ManualArray(Generic[T]):
             new_capacity = min(new_capacity, self._capacity_limit)
         if new_capacity < required_size:
             raise OverflowError("array maximum capacity exceeded")
-        new_storage: list[T | None] = [None] * new_capacity
+        new_storage = self._allocate_storage(new_capacity)
         index = 0
         while index < self._size:
             new_storage[index] = self._storage[index]
             index += 1
         self._storage = new_storage
+        self._capacity = new_capacity
+
+    @staticmethod
+    def _allocate_storage(capacity: int) -> ctypes.Array:
+        storage_type = ctypes.py_object * capacity
+        storage = storage_type()
+        index = 0
+        while index < capacity:
+            storage[index] = None
+            index += 1
+        return storage
 
     def _validate_index(self, index: int) -> None:
         if index < 0 or index >= self._size:

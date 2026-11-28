@@ -9,7 +9,8 @@ export type StaffView =
   | "Services & Counters"
   | "AI Search & Graph Visualizer"
   | "DS Visualizer"
-  | "Reports & Analytics";
+  | "Reports & Analytics"
+  | "Profile";
 
 export interface AuthUser {
   id: number;
@@ -32,7 +33,7 @@ export interface Token {
   status: string;
   counter_id: string | null;
   assigned_path: string[];
-  eta_min: number;
+  eta_min: number | null;
   arrival_timestamp: string;
   updated_at: string;
   service_started_at?: string | null;
@@ -57,7 +58,7 @@ export interface StateSnapshot {
     waiting_count: number;
     in_progress_count: number;
     completed_count: number;
-    average_eta_min: number;
+    average_eta_min: number | null;
     priority_queue_size: number;
   };
 }
@@ -76,7 +77,7 @@ export interface BookResponse {
 export interface TokenResponse {
   token: Token;
   optimal_path: string[];
-  eta_min: number;
+  eta_min: number | null;
 }
 
 export interface SearchResult {
@@ -177,7 +178,14 @@ export interface ReportSummary {
   waiting_count: number;
   in_progress_count: number;
   completed_count: number;
-  average_wait_min: number;
+  average_wait_min: number | null;
+  waiting_time_sample_count: number;
+  waiting_time_excluded: {
+    status: number;
+    missing_timestamp: number;
+    invalid_timestamp: number;
+    negative_duration: number;
+  };
   open_counters: number;
   busy_counters: number;
   utilization_pct: number;
@@ -190,4 +198,48 @@ export interface ReportSummary {
     completed_count: number;
     utilization_pct: number;
   }>;
+}
+
+export interface PlaygroundItem {
+  token_id: string;
+  value: string;
+}
+
+export interface DSPlaygroundSnapshot {
+  array: {
+    size: number;
+    capacity: number;
+    elements: PlaygroundItem[];
+  };
+  linked_list: PlaygroundItem[];
+  priority_queue: Array<{
+    index: number;
+    token_id: string;
+    value: string;
+    base_priority: number;
+    effective_priority: number;
+    arrival_timestamp: string;
+  }>;
+  bst: {
+    size: number;
+    root: BSTPlaygroundNode | null;
+    inorder: PlaygroundItem[];
+    preorder: PlaygroundItem[];
+    postorder: PlaygroundItem[];
+  };
+}
+
+export interface BSTPlaygroundNode {
+  key: string;
+  value: string;
+  left: BSTPlaygroundNode | null;
+  right: BSTPlaygroundNode | null;
+}
+
+export interface DSOperationResult {
+  structure: string;
+  operation: string;
+  message: string;
+  complexity: string;
+  snapshot: DSPlaygroundSnapshot;
 }

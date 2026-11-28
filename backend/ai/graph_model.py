@@ -81,23 +81,27 @@ def build_service_route_graph(
 def minimum_remaining_stage_duration(
     node: str,
     durations: Mapping[str, float] | None = None,
+    goal_state: str = SERVICE_ROUTE_STAGES[-1],
 ) -> float:
-    """Sum minimum durations for each remaining stage; zero at the goal."""
+    """Sum route-stage costs from a state to a selected reachable goal."""
 
     stage_durations = dict(DEFAULT_STAGE_DURATIONS)
     if durations is not None:
         stage_durations.update(
             {stage: float(durations[stage]) for stage in SERVICE_STAGE_KEYS if stage in durations}
         )
-    if node == SERVICE_ROUTE_STAGES[-1]:
+    if node == goal_state:
         return 0.0
     try:
         stage_index = SERVICE_ROUTE_STAGES.index(node)
+        goal_index = SERVICE_ROUTE_STAGES.index(goal_state)
     except ValueError:
+        return 0.0
+    if stage_index > goal_index:
         return 0.0
     return sum(
         stage_durations[stage]
-        for stage in SERVICE_STAGE_KEYS[stage_index:]
+        for stage in SERVICE_STAGE_KEYS[stage_index:goal_index]
     )
 
 

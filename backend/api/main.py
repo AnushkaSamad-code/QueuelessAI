@@ -13,18 +13,22 @@ import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from threading import RLock
-from typing import Literal, Sequence
+from typing import Callable, Literal, Sequence
 
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 try:
     from backend.ds.custom_array import TokenArray
     from backend.ds.linked_list import ServiceLinkedList
     from backend.ds.priority_queue import SchedulingPriorityQueue
     from backend.ds.bst import TokenBST
+    from backend.ds.playground import (
+        DataStructurePlayground,
+        DuplicateStructureItem,
+    )
     from backend.ai.graph_model import (
         SERVICE_ROUTE_STAGES,
         build_service_route_graph,
@@ -43,6 +47,10 @@ except ImportError:
     from backend.ds.linked_list import ServiceLinkedList
     from backend.ds.priority_queue import SchedulingPriorityQueue
     from backend.ds.bst import TokenBST
+    from backend.ds.playground import (
+        DataStructurePlayground,
+        DuplicateStructureItem,
+    )
     from backend.ai.graph_model import (
         SERVICE_ROUTE_STAGES,
         build_service_route_graph,
@@ -62,10 +70,11 @@ DB_PATH = Path(os.getenv("QUEUELESS_DB_PATH", str(DATA_DIR / "queueless.db")))
 
 
 class BookRequest(BaseModel):
-    customer_name: str = Field(min_length=1)
-    service_id: str
-    priority_level: Literal["STANDARD", "APPOINTMENT", "PRIORITY"] = "STANDARD"
-    arrival_offset_min: int = Field(default=0, ge=0)
+    model_config = ConfigDict(extra="forbid")
+
+    customer_name: str = Field(min_length=1, max_length=120)
+    service_id: str = Field(min_length=1, max_length=32)
+    priority_level: Literal["STANDARD"] = "STANDARD"
 
 
 class SearchRequest(BaseModel):
@@ -110,6 +119,39 @@ class CounterUpdateRequest(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=120)
     status: Literal["OPEN", "CLOSED"] | None = None
     supported_services: list[str] | None = None
+
+
+class ArrayOperationRequest(BaseModel):
+    operation: Literal["insert", "delete", "search", "update", "traverse"]
+    value: str | None = Field(default=None, max_length=120)
+    index: int | None = Field(default=None, ge=0)
+
+
+class LinkedListOperationRequest(BaseModel):
+    operation: Literal[
+        "insert_beginning",
+        "insert_end",
+        "insert_position",
+        "delete",
+        "search",
+        "traverse",
+    ]
+    value: str | None = Field(default=None, max_length=120)
+    position: int | None = Field(default=None, ge=0)
+    item_id: str | None = Field(default=None, max_length=32)
+
+
+class PriorityQueueOperationRequest(BaseModel):
+    operation: Literal["enqueue", "dequeue", "peek", "update_priority", "display"]
+    value: str | None = Field(default=None, max_length=120)
+    priority: int | None = Field(default=None, ge=0, le=9)
+    item_id: str | None = Field(default=None, max_length=32)
+
+
+class BSTOperationRequest(BaseModel):
+    operation: Literal["insert", "search", "delete", "inorder", "preorder", "postorder"]
+    key: str | None = Field(default=None, max_length=120)
+    value: str | None = Field(default=None, max_length=120)
 
 
 def _password_hash(password: str, salt: str | None = None) -> str:
@@ -164,12 +206,66 @@ def _validate_durations(durations: dict[str, float]) -> dict[str, float]:
     return normalized
 
 
+def _parse_utc_timestamp(value: object) -> datetime | None:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _waiting_time_summary(
+    tokens: Sequence[dict[str, object]],
+) -> dict[str, object]:
+    eligible_statuses = {"S5_IN_PROGRESS", "S6_COMPLETED"}
+    total_minutes = 0.0
+    sample_count = 0
+    excluded = {
+        "status": 0,
+        "missing_timestamp": 0,
+        "invalid_timestamp": 0,
+        "negative_duration": 0,
+    }
+    for token in tokens:
+        if token.get("status") not in eligible_statuses:
+            excluded["status"] += 1
+            continue
+        arrival_value = token.get("arrival_timestamp")
+        started_value = token.get("service_started_at")
+        if not arrival_value or not started_value:
+            excluded["missing_timestamp"] += 1
+            continue
+        arrival = _parse_utc_timestamp(arrival_value)
+        started = _parse_utc_timestamp(started_value)
+        if arrival is None or started is None:
+            excluded["invalid_timestamp"] += 1
+            continue
+        elapsed_seconds = (started - arrival).total_seconds()
+        if elapsed_seconds < 0:
+            excluded["negative_duration"] += 1
+            continue
+        total_minutes += elapsed_seconds / 60.0
+        sample_count += 1
+    return {
+        "average_wait_min": (
+            round(total_minutes / sample_count, 2) if sample_count else None
+        ),
+        "waiting_time_sample_count": sample_count,
+        "waiting_time_excluded": excluded,
+    }
+
+
 class QueueLessState:
     """Owns SQLite and all live QueueLess runtime structures."""
 
     def __init__(self) -> None:
         DATA_DIR.mkdir(parents=True, exist_ok=True)
         self.lock = RLock()
+        self.ds_playgrounds: dict[int, DataStructurePlayground] = {}
         self.seed = json.loads(SEED_PATH.read_text(encoding="utf-8"))
         self.services = {
             service["service_id"]: service
@@ -588,7 +684,7 @@ class QueueLessState:
 
         now = datetime.now(timezone.utc)
         next_token_id: str | None = None
-        next_key: tuple[int, datetime] | None = None
+        next_key: tuple[int, datetime, str] | None = None
         for item in self.priority_queue.to_heap_snapshot(now):
             candidate_id = str(item["token_id"])
             candidate = self.bst.search(candidate_id)
@@ -599,6 +695,7 @@ class QueueLessState:
             key = (
                 int(item["effective_priority"]),
                 datetime.fromisoformat(str(item["arrival_timestamp"])),
+                candidate_id,
             )
             if next_key is None or key < next_key:
                 next_token_id = candidate_id
@@ -678,12 +775,18 @@ class QueueLessState:
                 graph,
                 request.start_state,
                 request.goal_state,
-                lambda node: minimum_remaining_stage_duration(node, durations),
+                lambda node: minimum_remaining_stage_duration(
+                    node,
+                    durations,
+                    request.goal_state,
+                ),
             )
         payload = dict(result)
         payload["graph"] = self._export_graph(graph)
         payload["service_id"] = service_id
-        payload["heuristic_formula"] = "h(n) = sum of minimum remaining stage durations"
+        payload["heuristic_formula"] = (
+            "h(n) = remaining stage durations from n to the selected goal"
+        )
         with self._connect() as connection:
             connection.execute(
                 """
@@ -727,7 +830,7 @@ class QueueLessState:
                 "actions": ["Complete the current diagnostic stage"],
                 "transition_model": "Registration → Sample Collection → Report Collection → Service Completed",
                 "path_cost_function": "g(n) = cumulative estimated stage duration in minutes",
-                "heuristic_function": "h(n) = sum of minimum remaining stage durations",
+                "heuristic_function": "h(n) = remaining stage durations from n to the selected goal",
                 "goal_test": "Current state equals Service Completed",
             },
         }
@@ -806,12 +909,16 @@ class QueueLessState:
                 ),
                 "average_eta_min": (
                     round(
-                        sum(float(token["eta_min"]) for token in active)
-                        / len(active),
+                        sum(
+                            float(token["eta_min"])
+                            for token in active
+                            if token["status"] == "S3_WAITING"
+                        )
+                        / sum(token["status"] == "S3_WAITING" for token in active),
                         2,
                     )
-                    if active
-                    else 0.0
+                    if any(token["status"] == "S3_WAITING" for token in active)
+                    else None
                 ),
                 "priority_queue_size": self.priority_queue.size,
             },
@@ -984,54 +1091,86 @@ def get_services() -> list[dict[str, object]]:
     ]
 
 
+def _clean_required_name(value: str, field_name: str) -> str:
+    cleaned = value.strip()
+    if not cleaned:
+        raise HTTPException(status_code=422, detail=f"{field_name} is required")
+    return cleaned
+
+
+def _ensure_unique_service_name(name: str, excluding_id: str | None = None) -> None:
+    normalized_name = name.casefold()
+    for service_id, service in runtime.services.items():
+        if service_id == excluding_id:
+            continue
+        if str(service["name"]).strip().casefold() == normalized_name:
+            raise HTTPException(status_code=409, detail="Service name already exists")
+
+
+def _ensure_unique_counter_name(name: str, excluding_id: str | None = None) -> None:
+    normalized_name = name.casefold()
+    for counter_id, current_name in runtime.counter_names.items():
+        if counter_id != excluding_id and current_name.strip().casefold() == normalized_name:
+            raise HTTPException(status_code=409, detail="Counter name already exists")
+
+
 @app.post("/api/services")
 def create_service(
     request: ServiceRequest,
     _user: dict[str, object] = Depends(require_roles("STAFF", "ADMIN")),
 ) -> dict[str, object]:
-    if request.service_id in runtime.services:
-        raise HTTPException(status_code=409, detail="Service ID already exists")
-    durations = _validate_durations(request.estimated_durations_min)
-    stage_labels = {
-        "registration": "Registration",
-        "sample_collection": "Sample Collection",
-        "report_collection": "Report Collection",
-    }
-    service = {
-        "service_id": request.service_id,
-        "name": request.name.strip(),
-        "category": request.category.strip(),
-        "required_stages": list(stage_labels.values()),
-        "estimated_durations_min": {
-            stage_labels[key]: value for key, value in durations.items()
-        },
-    }
     with runtime.lock:
+        service_id = request.service_id.strip()
+        if not service_id:
+            raise HTTPException(status_code=422, detail="Service ID is required")
+        if service_id in runtime.services:
+            raise HTTPException(status_code=409, detail="Service ID already exists")
+        name = _clean_required_name(request.name, "Service name")
+        category = _clean_required_name(request.category, "Category")
+        _ensure_unique_service_name(name)
+        durations = _validate_durations(request.estimated_durations_min)
+        stage_labels = {
+            "registration": "Registration",
+            "sample_collection": "Sample Collection",
+            "report_collection": "Report Collection",
+        }
+        service = {
+            "service_id": service_id,
+            "name": name,
+            "category": category,
+            "required_stages": list(stage_labels.values()),
+            "estimated_durations_min": {
+                stage_labels[key]: value for key, value in durations.items()
+            },
+        }
         next_supported_services = {
-            counter_id: [*supported, request.service_id]
+            counter_id: [*supported, service_id]
             for counter_id, supported in runtime.counter_supported_services.items()
         }
-        with runtime._connect() as connection:
-            connection.execute(
-                """
-                INSERT INTO services(service_id, name, category, required_stages, estimated_durations)
-                VALUES (?, ?, ?, ?, ?)
-                """,
-                (
-                    request.service_id,
-                    service["name"],
-                    service["category"],
-                    json.dumps(service["required_stages"]),
-                    json.dumps(service["estimated_durations_min"]),
-                ),
-            )
-            for counter_id, supported in next_supported_services.items():
+        try:
+            with runtime._connect() as connection:
                 connection.execute(
-                    "UPDATE counters SET supported_services = ? WHERE counter_id = ?",
-                    (json.dumps(supported), counter_id),
+                    """
+                    INSERT INTO services(service_id, name, category, required_stages, estimated_durations)
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (
+                        service_id,
+                        service["name"],
+                        service["category"],
+                        json.dumps(service["required_stages"]),
+                        json.dumps(service["estimated_durations_min"]),
+                    ),
                 )
+                for counter_id, supported in next_supported_services.items():
+                    connection.execute(
+                        "UPDATE counters SET supported_services = ? WHERE counter_id = ?",
+                        (json.dumps(supported), counter_id),
+                    )
+        except sqlite3.IntegrityError as exc:
+            raise HTTPException(status_code=409, detail="Service already exists") from exc
         runtime.counter_supported_services = next_supported_services
-        runtime.services[request.service_id] = service
+        runtime.services[service_id] = service
     return service
 
 
@@ -1047,9 +1186,10 @@ def update_service(
             raise HTTPException(status_code=404, detail="Service not found")
         updated = dict(service)
         if request.name is not None:
-            updated["name"] = request.name.strip()
+            updated["name"] = _clean_required_name(request.name, "Service name")
         if request.category is not None:
-            updated["category"] = request.category.strip()
+            updated["category"] = _clean_required_name(request.category, "Category")
+        _ensure_unique_service_name(str(updated["name"]).strip(), service_id)
         if request.estimated_durations_min is not None:
             durations = _validate_durations(request.estimated_durations_min)
             stage_labels = {
@@ -1060,20 +1200,23 @@ def update_service(
             updated["estimated_durations_min"] = {
                 stage_labels[key]: value for key, value in durations.items()
             }
-        with runtime._connect() as connection:
-            connection.execute(
-                """
-                UPDATE services SET name = ?, category = ?, required_stages = ?,
-                    estimated_durations = ? WHERE service_id = ?
-                """,
-                (
-                    updated["name"],
-                    updated["category"],
-                    json.dumps(updated["required_stages"]),
-                    json.dumps(updated["estimated_durations_min"]),
-                    service_id,
-                ),
-            )
+        try:
+            with runtime._connect() as connection:
+                connection.execute(
+                    """
+                    UPDATE services SET name = ?, category = ?, required_stages = ?,
+                        estimated_durations = ? WHERE service_id = ?
+                    """,
+                    (
+                        updated["name"],
+                        updated["category"],
+                        json.dumps(updated["required_stages"]),
+                        json.dumps(updated["estimated_durations_min"]),
+                        service_id,
+                    ),
+                )
+        except sqlite3.IntegrityError as exc:
+            raise HTTPException(status_code=409, detail="Service already exists") from exc
         runtime.services[service_id] = updated
         return updated
 
@@ -1092,33 +1235,41 @@ def create_counter(
     _user: dict[str, object] = Depends(require_roles("STAFF", "ADMIN")),
 ) -> dict[str, object]:
     with runtime.lock:
-        if request.counter_id in runtime.counter_lists:
+        counter_id = request.counter_id.strip()
+        name = _clean_required_name(request.name, "Counter name")
+        if not counter_id:
+            raise HTTPException(status_code=422, detail="Counter ID is required")
+        if counter_id in runtime.counter_lists:
             raise HTTPException(status_code=409, detail="Counter ID already exists")
+        _ensure_unique_counter_name(name)
         unknown_services = set(request.supported_services) - set(runtime.services)
         if unknown_services:
             raise HTTPException(status_code=422, detail="Counter references an unknown service")
-        with runtime._connect() as connection:
-            connection.execute(
-                """
-                INSERT INTO counters(counter_id, counter_name, status, supported_services)
-                VALUES (?, ?, ?, ?)
-                """,
-                (
-                    request.counter_id,
-                    request.name.strip(),
-                    request.status,
-                    json.dumps(request.supported_services),
-                ),
-            )
-        runtime.counter_lists[request.counter_id] = ServiceLinkedList[dict[str, object]]()
-        runtime.current_by_counter[request.counter_id] = None
-        runtime.counter_status[request.counter_id] = request.status
-        runtime.counter_names[request.counter_id] = request.name.strip()
-        runtime.counter_supported_services[request.counter_id] = request.supported_services
+        try:
+            with runtime._connect() as connection:
+                connection.execute(
+                    """
+                    INSERT INTO counters(counter_id, counter_name, status, supported_services)
+                    VALUES (?, ?, ?, ?)
+                    """,
+                    (
+                        counter_id,
+                        name,
+                        request.status,
+                        json.dumps(request.supported_services),
+                    ),
+                )
+        except sqlite3.IntegrityError as exc:
+            raise HTTPException(status_code=409, detail="Counter already exists") from exc
+        runtime.counter_lists[counter_id] = ServiceLinkedList[dict[str, object]]()
+        runtime.current_by_counter[counter_id] = None
+        runtime.counter_status[counter_id] = request.status
+        runtime.counter_names[counter_id] = name
+        runtime.counter_supported_services[counter_id] = request.supported_services
         runtime.seed["counters"].append(
             {
-                "counter_id": request.counter_id,
-                "name": request.name.strip(),
+                "counter_id": counter_id,
+                "name": name,
                 "status": request.status,
                 "supported_services": request.supported_services,
             }
@@ -1140,7 +1291,12 @@ def update_counter(
         supported = request.supported_services
         if supported is not None and set(supported) - set(runtime.services):
             raise HTTPException(status_code=422, detail="Counter references an unknown service")
-        name = request.name.strip() if request.name is not None else runtime.counter_names[counter_id]
+        name = (
+            _clean_required_name(request.name, "Counter name")
+            if request.name is not None
+            else runtime.counter_names[counter_id]
+        )
+        _ensure_unique_counter_name(name, counter_id)
         status = request.status or runtime.counter_status[counter_id]
         next_supported = (
             supported
@@ -1182,7 +1338,9 @@ def get_state(
 @app.post("/api/tokens/book")
 def book_token(request: BookRequest) -> dict[str, object]:
     with runtime.lock:
-        if request.service_id not in runtime.services:
+        service_id = request.service_id.strip()
+        customer_name = _clean_required_name(request.customer_name, "Patient name")
+        if service_id not in runtime.services:
             raise HTTPException(status_code=404, detail="Unknown service_id")
 
         highest = 100
@@ -1198,18 +1356,17 @@ def book_token(request: BookRequest) -> dict[str, object]:
             raise HTTPException(status_code=409, detail="Token range Q101-Q999 exhausted")
 
         now = datetime.now(timezone.utc)
-        arrival = now - timedelta(minutes=request.arrival_offset_min)
-        recommendation = runtime._recommend_counter(request.service_id)
+        recommendation = runtime._recommend_counter(service_id)
         token: dict[str, object] = {
             "token_id": token_id,
-            "customer_name": request.customer_name,
-            "service_id": request.service_id,
-            "priority_level": request.priority_level,
+            "customer_name": customer_name,
+            "service_id": service_id,
+            "priority_level": "STANDARD",
             "status": "S3_WAITING",
             "counter_id": recommendation["counter_id"],
             "assigned_path": recommendation["optimal_path"],
-            "eta_min": recommendation["total_cost"],
-            "arrival_timestamp": arrival.isoformat(),
+            "eta_min": recommendation["estimated_wait_min"],
+            "arrival_timestamp": now.isoformat(),
             "updated_at": now.isoformat(),
             "service_started_at": None,
             "completed_at": None,
@@ -1228,10 +1385,21 @@ def get_token(token_id: str) -> dict[str, object]:
         token = runtime.bst.search(token_id)
         if token is None:
             raise HTTPException(status_code=404, detail="Token not found")
+        public_token = dict(token)
+        is_completed = token["status"] == "S6_COMPLETED"
+        eta_min = (
+            float(token["eta_min"])
+            if token["status"] == "S3_WAITING"
+            else None
+        )
+        optimal_path = [] if is_completed else list(token["assigned_path"])
+        public_token["eta_min"] = eta_min
+        if is_completed:
+            public_token["assigned_path"] = []
         return {
-            "token": token,
-            "optimal_path": token["assigned_path"],
-            "eta_min": token["eta_min"],
+            "token": public_token,
+            "optimal_path": optimal_path,
+            "eta_min": eta_min,
         }
 
 
@@ -1292,24 +1460,117 @@ def inspect_data_structures(
         return runtime.ds_snapshot()
 
 
+def _playground_for_user(user: dict[str, object]) -> DataStructurePlayground:
+    user_id = int(user["id"])
+    playground = runtime.ds_playgrounds.get(user_id)
+    if playground is None:
+        playground = DataStructurePlayground()
+        runtime.ds_playgrounds[user_id] = playground
+    return playground
+
+
+def _run_playground_operation(
+    user: dict[str, object],
+    operation: Callable[[DataStructurePlayground], dict[str, object]],
+) -> dict[str, object]:
+    with runtime.lock:
+        playground = _playground_for_user(user)
+        try:
+            return operation(playground)
+        except DuplicateStructureItem as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc.args[0])) from exc
+        except IndexError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        except LookupError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.get("/api/ds/playground")
+def get_ds_playground(
+    user: dict[str, object] = Depends(require_roles("STAFF", "ADMIN")),
+) -> dict[str, object]:
+    with runtime.lock:
+        return _playground_for_user(user).snapshot()
+
+
+@app.post("/api/ds/playground/array")
+def operate_array_playground(
+    request: ArrayOperationRequest,
+    user: dict[str, object] = Depends(require_roles("STAFF", "ADMIN")),
+) -> dict[str, object]:
+    return _run_playground_operation(
+        user,
+        lambda playground: playground.array_operation(
+            request.operation,
+            request.value,
+            request.index,
+        ),
+    )
+
+
+@app.post("/api/ds/playground/linked-list")
+def operate_linked_list_playground(
+    request: LinkedListOperationRequest,
+    user: dict[str, object] = Depends(require_roles("STAFF", "ADMIN")),
+) -> dict[str, object]:
+    return _run_playground_operation(
+        user,
+        lambda playground: playground.linked_list_operation(
+            request.operation,
+            request.value,
+            request.position,
+            request.item_id,
+        ),
+    )
+
+
+@app.post("/api/ds/playground/priority-queue")
+def operate_priority_queue_playground(
+    request: PriorityQueueOperationRequest,
+    user: dict[str, object] = Depends(require_roles("STAFF", "ADMIN")),
+) -> dict[str, object]:
+    return _run_playground_operation(
+        user,
+        lambda playground: playground.priority_queue_operation(
+            request.operation,
+            request.value,
+            request.priority,
+            request.item_id,
+        ),
+    )
+
+
+@app.post("/api/ds/playground/bst")
+def operate_bst_playground(
+    request: BSTOperationRequest,
+    user: dict[str, object] = Depends(require_roles("STAFF", "ADMIN")),
+) -> dict[str, object]:
+    return _run_playground_operation(
+        user,
+        lambda playground: playground.bst_operation(
+            request.operation,
+            request.key,
+            request.value,
+        ),
+    )
+
+
 @app.get("/api/reports/summary")
 def reports_summary(
     _user: dict[str, object] = Depends(require_roles("STAFF", "ADMIN")),
 ) -> dict[str, object]:
     with runtime.lock:
         tokens = list(runtime.array.traverse())
+        wait_summary = _waiting_time_summary(tokens)
         statuses = {
             "waiting": sum(token["status"] in ("S3_WAITING", "S4_COUNTER_ASSIGNED") for token in tokens),
             "in_progress": sum(token["status"] == "S5_IN_PROGRESS" for token in tokens),
             "completed": sum(token["status"] == "S6_COMPLETED" for token in tokens),
         }
-        wait_minutes = []
-        for token in tokens:
-            started_at = token.get("service_started_at")
-            if started_at:
-                arrival = datetime.fromisoformat(str(token["arrival_timestamp"]))
-                started = datetime.fromisoformat(str(started_at))
-                wait_minutes.append(max(0.0, (started - arrival).total_seconds() / 60))
         total = len(tokens)
         active_counters = sum(status == "OPEN" for status in runtime.counter_status.values())
         busy_counters = sum(
@@ -1340,7 +1601,7 @@ def reports_summary(
             "waiting_count": statuses["waiting"],
             "in_progress_count": statuses["in_progress"],
             "completed_count": statuses["completed"],
-            "average_wait_min": round(sum(wait_minutes) / len(wait_minutes), 2) if wait_minutes else 0.0,
+            **wait_summary,
             "open_counters": active_counters,
             "busy_counters": busy_counters,
             "utilization_pct": round(busy_counters / active_counters * 100, 2) if active_counters else 0.0,

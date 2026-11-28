@@ -2,46 +2,40 @@
 
 ## 1. Access and Roles
 
-Open the frontend at the configured Vite address. Use the role assigned to the account:
+Open the frontend at the configured Vite address and sign in with the account role:
 
-- **Customer Portal:** appointment, check-in, token, and ETA actions.
-- **Staff Counter Console:** queue and stage operations for authorized counters.
-- **Admin & AI Inspector Console:** counter availability, analytics, graph search, and structure inspection.
+- **Customer Portal:** book a diagnostic service and track a token.
+- **Staff Workspace:** dashboard, booking, counter operations, configuration, AI search, Data Structures, analytics, and profile.
+- **Admin and Staff** share the workspace shell; API authorization controls access to protected operations.
 
 Do not share account credentials. A user may see only the data and actions permitted by their role.
 
 ## 2. Customer Portal
 
-### 2.1 Book an Appointment
+### 2.1 Book a Diagnostic Service
 
-1. Open **Customer Portal** and select **Book Appointment**.
-2. Enter the customer name or verified account identity.
-3. Select a diagnostic laboratory service, date, and available time slot.
-4. Review the service duration and appointment details.
-5. Select **Confirm Booking**.
-6. Record the appointment reference shown by the confirmation message.
+1. Open **Customer Booking** in the Staff Workspace or use the Customer Portal.
+2. Enter the patient name. The new booking field starts blank.
+3. Select one of the configured diagnostic services.
+4. Review the displayed estimated service duration.
+5. Select **Generate digital token** and keep the returned token ID.
 
-The system rejects past dates, closed slots, duplicate active appointments, and unknown services. A failed request does not create a token.
+The current system does not verify appointment dates, time slots, or appointment eligibility. Do not treat a booking as a confirmed time-slot appointment.
 
-### 2.2 Receive a Digital Token
+### 2.2 Scheduling Priority
 
-1. Select **Check In** and enter the appointment reference when using an appointment.
-2. For a walk-in visit, select **Generate Walk-In Token**.
-3. Confirm the displayed service and customer identity.
-4. Select **Generate Token**.
-5. The portal displays the token, for example `Q101`, its current stage, and queue status.
+Public bookings are assigned `STANDARD` priority by the server; clients cannot choose elevated priority or backdate arrival time. Queue ordering uses effective priority, then the earliest server-recorded `arrival_timestamp`, then token ID for deterministic ties. The system has no verified appointment-priority mechanism, so appointment-based priority is not applied.
 
-Keep the token visible when contacting staff. The token remains unique while its record is active or retained by the system.
+### 2.3 Receive and Track a Digital Token
 
-### 2.3 Read the AI Recommendation and Live ETA
+1. The booking response displays the generated token, for example `Q101`, patient, selected service, and status.
+2. The token tracker refreshes automatically; a patient can also enter a token ID to look it up.
+3. A waiting token may display an estimated wait. The estimate is not a guaranteed start time.
+4. A called or in-progress token displays its lifecycle status. A completed token displays **Service Completed** and no longer shows an active route or ETA.
 
-1. Open **My Queue Status**.
-2. Read the recommended counter and the route summary.
-3. Read the estimated wait and the current queue position.
-4. Refresh the status or wait for the live update indicator.
-5. Follow the portal instruction to proceed only when the token is called.
+### 2.4 Read Waiting-Time Analytics
 
-The recommendation is an estimate based on counter availability, queue state, stage duration, and aging priority. It is not a guarantee of completion time. A transfer or counter status change can change the ETA.
+Average waiting time is the mean interval from `arrival_timestamp` to `service_started_at`, in minutes, for `S5_IN_PROGRESS` and `S6_COMPLETED` tokens with valid timestamps. Waiting/called tokens, missing timestamps, malformed timestamps, and negative intervals are excluded and reported separately. An empty valid sample is shown as **No valid data**, not as a zero-minute average.
 
 ## 3. Staff Counter Console
 
@@ -119,16 +113,16 @@ Interpret results as follows:
 
 The visualizer is an inspection tool. It does not change a live assignment unless the administrator confirms the assignment action.
 
-### 4.3 Inspect Runtime Data Structures
+### 4.3 Use the Data Structures Visualizer
 
-Open **AI Inspector > Data Structures** and select:
+Open **DS Visualizer** and select:
 
-- **BST:** view `Inorder`, `Preorder`, or `Postorder` token traversal.
-- **Min-Heap:** view effective priority, arrival timestamp, and heap order.
-- **TokenArray:** view active token and counter records by index.
-- **ServiceLinkedList:** view each counter queue and completed-service history.
+- **Array:** insert, delete, search, update, and traverse.
+- **Linked List:** insert at the beginning, end, or position; delete, search, and traverse.
+- **Priority Queue:** enqueue, dequeue, peek, update priority, and display.
+- **Binary Search Tree:** insert, search, delete, and run inorder, preorder, or postorder traversals.
 
-These are runtime views reconstructed from SQLite. A discrepancy between a view and the database is a data-integrity incident and must be recorded rather than corrected by direct UI editing.
+These operations use the manual backend data-structure classes in an isolated in-memory playground. They do not inspect or mutate operational tokens, queues, counters, or SQLite records; playground contents reset when the backend process restarts.
 
 ## 5. Safe Operating Rules
 
